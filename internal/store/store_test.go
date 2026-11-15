@@ -395,3 +395,28 @@ func TestClaimNextChannelScope(t *testing.T) {
 		t.Errorf("default instance claimed %v (err %v), want nothing (only #1 left, and it is tagged)", r, err)
 	}
 }
+
+// OpenMemory gives an ephemeral store: a review round-trips within it, and a second one is independent — it keeps
+// nothing on disk, for a one-shot CI run.
+func TestOpenMemory(t *testing.T) {
+	s, err := OpenMemory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	id, err := s.Insert(&Review{Repo: "o/r", Number: 1, Status: Queued})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, err := s.Get(id); err != nil || r.Repo != "o/r" {
+		t.Fatalf("round-trip in memory: r=%+v err=%v", r, err)
+	}
+	s2, err := OpenMemory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	if r, _ := s2.Get(id); r != nil {
+		t.Error("a second in-memory store should be independent, but found the first store's review")
+	}
+}
