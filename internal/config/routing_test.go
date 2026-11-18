@@ -10,10 +10,11 @@ import (
 func TestRouterChannelFor(t *testing.T) {
 	company := Channel{Name: "company", Orgs: []string{"acme", "acme-labs"}, Repos: RepoMatch{Blacklist: []string{"^acme/archived-"}}}
 	personal := Channel{Name: "personal", Orgs: []string{"me"}}
-	oss := Channel{Name: "oss", Repos: RepoMatch{Whitelist: []string{"^contrib/"}}} // pattern-only, any owner
-	fallback := Channel{Name: "fallback"}                                           // catch-all
+	oss := Channel{Name: "oss", Repos: RepoMatch{Whitelist: []string{"^contrib/"}}}     // pattern-only, any owner
+	vendor := Channel{Name: "vendor", Repos: RepoMatch{Whitelist: []string{"vendor/"}}} // unanchored prefix on purpose
+	fallback := Channel{Name: "fallback"}                                               // catch-all
 
-	r, err := NewRouter([]Channel{company, personal, oss, fallback})
+	r, err := NewRouter([]Channel{company, personal, oss, vendor, fallback})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,6 +25,9 @@ func TestRouterChannelFor(t *testing.T) {
 		{"acme/web", "company"},
 		{"ACME/web", "company"},            // owner case-insensitive
 		{"acme/archived-2019", "fallback"}, // blacklisted on company, so it falls through
+		{"ACME/archived-2019", "fallback"}, // blacklist is case-insensitive too
+		{"vendor/lib", "vendor"},           // unanchored prefix still matches from the owner
+		{"evil-vendor/lib", "fallback"},    // start-anchored: not a substring match (the fix)
 		{"me/dotfiles", "personal"},
 		{"contrib/tool", "oss"},        // pattern-only channel, any owner
 		{"stranger/thing", "fallback"}, // nothing specific owns it

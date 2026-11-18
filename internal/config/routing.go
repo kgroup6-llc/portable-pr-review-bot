@@ -75,7 +75,7 @@ func compileChannel(ch Channel) (compiledChannel, error) {
 		{"REPOS_DENY", ch.Repos.Blacklist, &cc.blacklist},
 	} {
 		for _, p := range g.pats {
-			re, err := regexp.Compile(p)
+			re, err := regexp.Compile("(?i)^(?:" + p + ")")
 			if err != nil {
 				return compiledChannel{}, fmt.Errorf("channel %q: %s pattern %q: %w", ch.Name, g.label, p, err)
 			}
@@ -87,7 +87,8 @@ func compileChannel(ch Channel) (compiledChannel, error) {
 
 // owns reports whether this channel owns repo. The owner must be in the channel's orgs (an empty org list means any
 // owner); the repo must match the whitelist if it has one; and it must match no blacklist pattern. Patterns are tested
-// against the full "owner/name".
+// against the full "owner/name", start-anchored and case-insensitively, so a pattern matches from the owner on (not as a
+// substring: "myorg/" cannot match "evil-myorg/x") and casing never changes routing (matching the case-folded owner check).
 func (cc compiledChannel) owns(repo string) bool {
 	owner, _, _ := strings.Cut(repo, "/")
 	if len(cc.ch.Orgs) > 0 && !containsFold(cc.ch.Orgs, owner) {
