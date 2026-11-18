@@ -69,7 +69,16 @@ func ServeWebhook(ctx context.Context, cfg config.Config) error {
 	if addr == "" {
 		addr = ":8080"
 	}
-	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: mux,
+		// Bound every phase so an unauthenticated slow-body or idle connection can't pin a goroutine/socket
+		// indefinitely (the body is read before the signature is checked, so this needs no secret).
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	go func() {
 		<-ctx.Done()
 		sh, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -102,6 +111,7 @@ func reviewOnce(ctx context.Context, base pipeline.Deps, ev webhook.Event, chann
 	defer st.Close()
 	d := base
 	d.Store = st
+	d.OneShot = true // a webhook review is stateless: no daemon page or desktop notification to point at
 	id, err := st.Insert(rv)
 	if err != nil {
 		log.Printf("webhook: %s#%d: %v", ev.Repo, ev.Number, err)

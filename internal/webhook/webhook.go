@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 // maxBody caps a webhook body. GitHub's deliveries are well under this; the cap stops a hostile sender from streaming
@@ -109,6 +110,37 @@ type Handler struct {
 	Log    func(format string, args ...any)
 	// Base is the context the detached review runs under (the server's lifetime). nil means context.Background.
 	Base context.Context
+
+	mu    sync.Mutex
+	seen  map[string]struct{} // X-GitHub-Delivery ids already dispatched, for replay/double-send protection
+	order []string            // insertion order, so seen stays bounded
+}
+
+// maxSeenDeliveries bounds the replay-dedupe set; GitHub's delivery ids are UUIDs, so this is a small, fixed memory cost.
+const maxSeenDeliveries = 4096
+
+// duplicate records delivery id and reports whether it was already seen. A byte-identical replay (an attacker
+// re-POSTing a captured, still-validly-signed delivery) reuses the id and is dropped; GitHub's own manual redeliveries
+// get a fresh id, so they are not blocked. An empty id (no header) is never a duplicate.
+func (h *Handler) duplicate(id string) bool {
+	if id == "" {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.seen == nil {
+		h.seen = make(map[string]struct{}, maxSeenDeliveries)
+	}
+	if _, ok := h.seen[id]; ok {
+		return true
+	}
+	h.seen[id] = struct{}{}
+	h.order = append(h.order, id)
+	if len(h.order) > maxSeenDeliveries {
+		delete(h.seen, h.order[0])
+		h.order = h.order[1:]
+	}
+	return false
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -131,11 +163,25 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent) // acknowledged; nothing to review
 		return
 	}
+	if h.duplicate(r.Header.Get("X-GitHub-Delivery")) {
+		h.logf("ignored a duplicate delivery of %s#%d", ev.Repo, ev.Number)
+		w.WriteHeader(http.StatusOK) // already dispatched; don't review twice
+		return
+	}
 	base := h.Base
 	if base == nil {
 		base = context.Background()
 	}
-	go h.Review(base, ev)
+	// The review runs detached from the HTTP response, so it is outside net/http's per-request panic recovery;
+	// guard it so a panic in one review can never take the listener down.
+	go func() {
+		defer func() {
+			if p := recover(); p != nil {
+				h.logf("recovered from a panic reviewing %s#%d: %v", ev.Repo, ev.Number, p)
+			}
+		}()
+		h.Review(base, ev)
+	}()
 	w.WriteHeader(http.StatusAccepted)
 }
 

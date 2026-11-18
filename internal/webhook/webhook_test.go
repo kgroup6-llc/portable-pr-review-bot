@@ -143,3 +143,35 @@ func TestHandlerRejectsGet(t *testing.T) {
 		t.Errorf("GET: status %d, want 405", rr.Code)
 	}
 }
+
+// A byte-identical replay (same X-GitHub-Delivery) is dropped with 200 and dispatched only once; a fresh delivery id
+// for the same PR still dispatches.
+func TestHandlerDedupe(t *testing.T) {
+	const secret = "hooksecret"
+	body := []byte(`{"action":"opened","number":7,"pull_request":{"number":7,"draft":false,"head":{"sha":"abc123"}},` +
+		`"repository":{"full_name":"acme/web"}}`)
+	calls := make(chan Event, 4)
+	h := &Handler{Secret: secret, Log: t.Logf, Review: func(_ context.Context, ev Event) { calls <- ev }}
+	post := func(delivery string) int {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(body)))
+		req.Header.Set("X-Hub-Signature-256", sign(secret, body))
+		req.Header.Set("X-GitHub-Event", "pull_request")
+		req.Header.Set("X-GitHub-Delivery", delivery)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		return rr.Code
+	}
+	if c := post("d1"); c != http.StatusAccepted {
+		t.Errorf("first delivery: status %d, want 202", c)
+	}
+	if c := post("d1"); c != http.StatusOK {
+		t.Errorf("replayed delivery: status %d, want 200 (dropped, not reviewed again)", c)
+	}
+	if c := post("d2"); c != http.StatusAccepted {
+		t.Errorf("fresh delivery id: status %d, want 202", c)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := len(calls); n != 2 {
+		t.Errorf("Review ran %d times, want 2 (the replay of d1 was dropped)", n)
+	}
+}
