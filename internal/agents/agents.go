@@ -404,7 +404,29 @@ func claudeEnv(ctx context.Context) []string {
 // (holding gh-read and git-read) at the front of PATH, and last the channel's auth overrides so they win.
 func claudeCmdEnv(ctx context.Context, bin string) []string {
 	env := append(os.Environ(), "PERSONAL_REVIEW_BOT_AGENT=1", "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	return append(env, claudeEnv(ctx)...)
+	co := claudeEnv(ctx)
+	if len(co) == 0 {
+		return env // no channel override: the ambient Claude login, exactly as before
+	}
+	// A channel picked its own credential. Drop every other Claude credential inherited from the ambient
+	// env, so the chosen one is the only one the subprocess sees and the CLI can't fall back to a different
+	// ambient identity by its own precedence.
+	return append(withoutClaudeCreds(env), co...)
+}
+
+// withoutClaudeCreds returns env with every mutually-exclusive Claude credential var removed (the three
+// ClaudeAuth.Env can set), so a channel's chosen credential is unambiguous to the subprocess.
+func withoutClaudeCreds(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, e := range env {
+		if strings.HasPrefix(e, "CLAUDE_CONFIG_DIR=") ||
+			strings.HasPrefix(e, "CLAUDE_CODE_OAUTH_TOKEN=") ||
+			strings.HasPrefix(e, "ANTHROPIC_API_KEY=") {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 // claude runs `claude -p` with the prompt on stdin (diffs can exceed the argv limit) and streams its events, which,

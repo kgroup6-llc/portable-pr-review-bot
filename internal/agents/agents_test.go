@@ -22,6 +22,17 @@ func TestClaudeCmdEnv(t *testing.T) {
 	if v := lastEnv(claudeCmdEnv(ctx, "/bin"), "CLAUDE_CONFIG_DIR"); v != "/chan" {
 		t.Errorf("channel override not applied last: CLAUDE_CONFIG_DIR=%q, want /chan", v)
 	}
+
+	// Exclusivity: a channel credential drops any different ambient Claude credential, so the CLI can't
+	// silently bill/act under the ambient identity instead of the channel's.
+	t.Setenv("ANTHROPIC_API_KEY", "ambient-key")
+	ex := claudeCmdEnv(WithClaudeEnv(context.Background(), []string{"CLAUDE_CODE_OAUTH_TOKEN=chantok"}), "/bin")
+	if v := lastEnv(ex, "CLAUDE_CODE_OAUTH_TOKEN"); v != "chantok" {
+		t.Errorf("channel OAuth token not applied: %q", v)
+	}
+	if slices.ContainsFunc(ex, func(e string) bool { return strings.HasPrefix(e, "ANTHROPIC_API_KEY=") }) {
+		t.Error("ambient ANTHROPIC_API_KEY leaked alongside the channel's OAuth token")
+	}
 }
 
 // lastEnv returns the value of the last KEY= entry, which is the one exec uses when a key repeats.
