@@ -37,9 +37,10 @@ const usage = `personal-review-bot: reviews PRs where your review is requested d
   personal-review-bot                       terminal UI: what's running and the last 10 reviews
   personal-review-bot status                the same, printed once
   personal-review-bot daemon                run the bot (launchd runs this)
-  personal-review-bot review [--dry-run] [--deep] <PR-URL>
+  personal-review-bot review [--dry-run] [--deep] [--ephemeral] <PR-URL>
                                    review one PR now; --dry-run posts nothing and opens nothing;
-                                   --deep reviews it as if it were large (Opus, the design review)
+                                   --deep reviews it as if it were large (Opus, the design review);
+                                   --ephemeral keeps no state (for CI / one-shot runs)
   personal-review-bot queue [--deep] <PR-URL>
                                             hand a PR to the running daemon
   personal-review-bot page                  serve only the confirmation page (no polling, no reviews)
@@ -145,7 +146,7 @@ func review(ctx context.Context, cfg config.Config, args []string) error {
 		return err
 	}
 	logger := log.New(os.Stderr, "", log.Ltime)
-	if err := pipeline.Run(ctx, pipeline.Deps{Cfg: cfg, Store: st, GH: client, Log: logger.Printf}, id); err != nil {
+	if err := pipeline.Run(ctx, pipeline.Deps{Cfg: cfg, Store: st, GH: client, Log: logger.Printf, OneShot: *ephemeral}, id); err != nil {
 		return err
 	}
 	r, err := st.Get(id)

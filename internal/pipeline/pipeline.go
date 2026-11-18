@@ -35,6 +35,7 @@ type Deps struct {
 	Log      func(format string, args ...any)
 	Channels []config.Channel // the channels this instance runs; empty = just the default channel
 	Router   *config.Router   // routes a repo to its owning channel; nil = the default channel owns everything
+	OneShot  bool             // a stateless one-shot run (--ephemeral / webhook): no daemon page or desktop notice to point at
 }
 
 // PRStatus is what the store keeps of a PR's state on GitHub.
@@ -463,7 +464,8 @@ func Run(ctx context.Context, d Deps, id int64) (err error) {
 		if err := d.Store.Finish(id, store.AwaitingYou, decision, summary, strings.Join(failed, "; ")); err != nil {
 			return err
 		}
-		if !r.DryRun {
+		if !r.DryRun && !d.OneShot {
+			// A one-shot run has no daemon page or TUI for the notification to open; skip it.
 			AskUser(d, r)
 		}
 		d.Log("%s: waiting for you: %s", tag, decision)
