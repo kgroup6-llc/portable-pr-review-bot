@@ -37,9 +37,10 @@ const usage = `personal-review-bot: reviews PRs where your review is requested d
   personal-review-bot                       terminal UI: what's running and the last 10 reviews
   personal-review-bot status                the same, printed once
   personal-review-bot daemon                run the bot (launchd runs this)
-  personal-review-bot review [--dry-run] [--deep] <PR-URL>
+  personal-review-bot review [--dry-run] [--deep] [--ephemeral] <PR-URL>
                                    review one PR now; --dry-run posts nothing and opens nothing;
-                                   --deep reviews it as if it were large (Opus, the design review)
+                                   --deep reviews it as if it were large (Opus, the design review);
+                                   --ephemeral keeps no state (for CI / one-shot runs)
   personal-review-bot queue [--deep] <PR-URL>
                                             hand a PR to the running daemon
   personal-review-bot page                  serve only the confirmation page (no polling, no reviews)
@@ -120,11 +121,18 @@ func review(ctx context.Context, cfg config.Config, args []string) error {
 	fs := flag.NewFlagSet("review", flag.ExitOnError)
 	dry := fs.Bool("dry-run", false, "post nothing, open nothing")
 	deep := fs.Bool("deep", false, "review it as if it were large: Opus, the design review, no usage savings")
+	ephemeral := fs.Bool("ephemeral", false, "keep no state: review in memory and leave nothing on disk (for CI / one-shot runs)")
 	_ = fs.Parse(args)
 	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: personal-review-bot review [--dry-run] [--deep] <PR-URL>")
+		return fmt.Errorf("usage: personal-review-bot review [--dry-run] [--deep] [--ephemeral] <PR-URL>")
 	}
-	st, err := store.Open(cfg.DBPath())
+	var st *store.Store
+	var err error
+	if *ephemeral {
+		st, err = store.OpenMemory() // one-shot: hold the review while it runs, leave nothing behind
+	} else {
+		st, err = store.Open(cfg.DBPath())
+	}
 	if err != nil {
 		return err
 	}
@@ -138,7 +146,7 @@ func review(ctx context.Context, cfg config.Config, args []string) error {
 		return err
 	}
 	logger := log.New(os.Stderr, "", log.Ltime)
-	if err := pipeline.Run(ctx, pipeline.Deps{Cfg: cfg, Store: st, GH: client, Log: logger.Printf}, id); err != nil {
+	if err := pipeline.Run(ctx, pipeline.Deps{Cfg: cfg, Store: st, GH: client, Log: logger.Printf, OneShot: *ephemeral}, id); err != nil {
 		return err
 	}
 	r, err := st.Get(id)
@@ -160,7 +168,9 @@ func review(ctx context.Context, cfg config.Config, args []string) error {
 		fmt.Printf("\n[%s] %d%% %s · %s:%d · %s (%s, %s)\n  %s\n", f.Status, f.Confidence, f.Verdict, f.Path, f.Line,
 			f.Title, f.Agent, f.Severity, f.Comment)
 	}
-	fmt.Printf("\nreview page: %s/r/%d (needs the daemon running)\n", cfg.WebURL(), id)
+	if !*ephemeral {
+		fmt.Printf("\nreview page: %s/r/%d (needs the daemon running)\n", cfg.WebURL(), id)
+	}
 	return nil
 }
 
