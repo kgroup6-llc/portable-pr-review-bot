@@ -2,6 +2,7 @@ package store
 
 import (
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -328,5 +329,69 @@ func TestPostedEdits(t *testing.T) {
 	}
 	if got := e.VerbatimShare(); got < 0.66 || got > 0.67 {
 		t.Errorf("VerbatimShare() = %v, want ~0.667", got)
+	}
+}
+
+// A review records which channel owns it, so the worker reviews it with that channel's subscription and settings; a
+// review with no channel reads back empty (the default channel).
+func TestReviewChannelRoundTrip(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "reviews.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	id, err := s.Insert(&Review{Repo: "acme/web", Number: 1, Status: Queued, Source: "auto", Channel: "company"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, err := s.Get(id); err != nil {
+		t.Fatal(err)
+	} else if r.Channel != "company" {
+		t.Errorf("channel = %q, want company", r.Channel)
+	}
+	id2, _ := s.Insert(&Review{Repo: "me/x", Number: 2, Status: Queued})
+	if r2, _ := s.Get(id2); r2.Channel != "" {
+		t.Errorf("channel = %q, want empty for a review with no channel", r2.Channel)
+	}
+}
+
+// ClaimNext pulls only untagged (default) reviews and those owned by the channels this instance runs, never
+// another channel's — so a scoped instance can't run someone else's review under the wrong identity.
+func TestClaimNextChannelScope(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "reviews.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	mk := func(n int, channel string) {
+		if _, err := s.Insert(&Review{Repo: "o/r", Number: n, Status: Queued, Channel: channel}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk(1, "personal") // not ours
+	mk(2, "")         // untagged: any instance may run
+	mk(3, "company")  // ours
+
+	// An instance that runs only "company" claims the untagged review and company's, in id order, never personal's.
+	var got []int
+	for {
+		r, err := s.ClaimNext([]string{"company"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r == nil {
+			break
+		}
+		got = append(got, r.Number)
+	}
+	if want := []int{2, 3}; !slices.Equal(got, want) {
+		t.Errorf("company instance claimed %v, want %v (never personal's #1)", got, want)
+	}
+	if r, _ := s.Get(1); r.Status != Queued {
+		t.Errorf("personal review #1 = %q, want still Queued (left for its own instance)", r.Status)
+	}
+	// A default instance (empty names) claims only untagged reviews; #1 is tagged personal, so nothing is claimable.
+	if r, err := s.ClaimNext(nil); err != nil || r != nil {
+		t.Errorf("default instance claimed %v (err %v), want nothing (only #1 left, and it is tagged)", r, err)
 	}
 }

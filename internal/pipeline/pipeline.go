@@ -28,11 +28,13 @@ import (
 )
 
 type Deps struct {
-	Cfg   config.Config
-	Live  *config.Live // the settings as the Settings page last saved them (nil: Cfg never changes)
-	Store *store.Store
-	GH    *gh.Client
-	Log   func(format string, args ...any)
+	Cfg      config.Config
+	Live     *config.Live // the settings as the Settings page last saved them (nil: Cfg never changes)
+	Store    *store.Store
+	GH       *gh.Client
+	Log      func(format string, args ...any)
+	Channels []config.Channel // the channels this instance runs; empty = just the default channel
+	Router   *config.Router   // routes a repo to its owning channel; nil = the default channel owns everything
 }
 
 // PRStatus is what the store keeps of a PR's state on GitHub.
@@ -67,7 +69,59 @@ func (d Deps) Current() Deps {
 // Channel is the channel this Deps acts for. Today it is always the single default channel, derived from the current
 // config, so the review and poll paths read per-channel values (orgs now; more later) from a Channel rather than from
 // Cfg directly. Later phases load several channels and give each run its own; this is where that resolves.
-func (d Deps) Channel() config.Channel { return config.DefaultChannel(d.Cfg) }
+// ChannelNames lists the channels this instance runs, for scoping the queue claim to them.
+func (d Deps) ChannelNames() []string {
+	names := make([]string, 0, len(d.Channels))
+	for _, ch := range d.Channels {
+		names = append(names, ch.Name)
+	}
+	return names
+}
+
+// channelFor returns the channel that owns a review: the one named by r.Channel among this instance's channels, or the
+// default channel (today's config) when the review names none or names one this instance does not run.
+func (d Deps) channelFor(r *store.Review) config.Channel {
+	if r.Channel != "" {
+		for _, ch := range d.Channels {
+			if ch.Name == r.Channel {
+				return ch
+			}
+		}
+	}
+	return config.DefaultChannel(d.Cfg)
+}
+
+// PollOrgs is the union of the orgs of the channels this instance runs — the scope the service-mode poll searches. If
+// any channel reviews anywhere (no orgs), the poll searches everywhere. With no channels configured it is the default
+// channel's orgs (today's ORG).
+func (d Deps) PollOrgs() []string {
+	chs := d.Channels
+	if len(chs) == 0 {
+		chs = []config.Channel{config.DefaultChannel(d.Cfg)}
+	}
+	var out []string
+	for _, ch := range chs {
+		if len(ch.Orgs) == 0 {
+			return nil // this channel reviews anywhere, so the poll must search everywhere
+		}
+		for _, o := range ch.Orgs {
+			if !slices.ContainsFunc(out, func(x string) bool { return strings.EqualFold(x, o) }) {
+				out = append(out, o)
+			}
+		}
+	}
+	return out
+}
+
+// RouteChannel names the channel that owns repo, and whether any channel this instance runs owns it. With no router
+// (a bare Deps, as in tests) the default channel owns everything.
+func (d Deps) RouteChannel(repo string) (name string, owned bool) {
+	if d.Router == nil {
+		return "", true
+	}
+	ch, ok := d.Router.ChannelFor(repo)
+	return ch.Name, ok
+}
 
 // Run reviews the PR behind review id. It records every outcome in the store and only returns an error for
 // failures it could not record.
@@ -98,11 +152,13 @@ func Run(ctx context.Context, d Deps, id int64) (err error) {
 		return fail(fmt.Errorf("reviewers and prompts (check with `personal-review-bot agents`): %w", err))
 	}
 
-	// This channel's Claude subscription is injected into every `claude` subprocess for this review. The default
-	// channel resolves to nothing, so the ambient login is used, unchanged.
-	claudeEnv, err := d.Channel().Claude.Env()
+	// This review runs under its channel — the default channel (today's config) when it names none. The channel's
+	// Claude subscription is injected into every `claude` subprocess; the default resolves to nothing, so the ambient
+	// login is used, unchanged.
+	ch := d.channelFor(r)
+	claudeEnv, err := ch.Claude.Env()
 	if err != nil {
-		return fail(fmt.Errorf("channel %q Claude auth: %w", d.Channel().Name, err))
+		return fail(fmt.Errorf("channel %q Claude auth: %w", ch.Name, err))
 	}
 	ctx = agents.WithClaudeEnv(ctx, claudeEnv)
 
@@ -146,7 +202,7 @@ func Run(ctx context.Context, d Deps, id int64) (err error) {
 	defer ws.Cleanup()
 	in := agents.Input{Repo: r.Repo, Number: r.Number, Title: pr.Title, Author: pr.Author, Body: pr.Body,
 		Base: pr.BaseRef, Head: pr.HeadRef, Diff: diff, Dir: ws.Dir, HeadSHA: pr.HeadSHA, Effort: plan.Effort,
-		Owner: d.GH.Login, Org: relatedOrg(d.Channel().Orgs, r.Repo)}
+		Owner: d.GH.Login, Org: relatedOrg(ch.Orgs, r.Repo)}
 	if prev, err := d.Store.PreviousComplete(r.Repo, r.Number, id); err == nil && prev != nil {
 		in.PrevSHA = prev.HeadSHA
 	}
