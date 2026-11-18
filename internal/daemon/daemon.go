@@ -318,7 +318,7 @@ func worker(ctx context.Context, d pipeline.Deps, upd *updater, n int) {
 		var err error
 		upd.running.Add(1)
 		if n < cur.Cfg.MaxParallel {
-			if r, err = cur.Store.ClaimNext(); err != nil {
+			if r, err = cur.Store.ClaimNext(cur.ChannelNames()); err != nil {
 				log.Printf("queue: %v", err)
 			}
 		}

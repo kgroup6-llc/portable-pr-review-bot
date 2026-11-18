@@ -363,11 +363,24 @@ func (s *Store) PreviousComplete(repo string, number int, before int64) (*Review
 	return r, err
 }
 
-// ClaimNext marks the oldest queued review as running and returns it (nil if the queue is empty).
-func (s *Store) ClaimNext() (*Review, error) {
+// ClaimNext marks the oldest queued review this instance may run as running and returns it (nil if none
+// are claimable). It claims only reviews whose channel is one of names, plus untagged (default-channel)
+// reviews, so an instance that runs a subset of channels never pulls another channel's review and runs it
+// under the wrong (ambient) identity. An empty names claims only untagged reviews — today's single-channel
+// behavior, where every review is untagged.
+func (s *Store) ClaimNext(names []string) (*Review, error) {
+	cond := "channel = ''"
+	args := []any{Running, now(), Queued}
+	if len(names) > 0 {
+		cond = "(channel = '' OR channel IN (" + strings.TrimPrefix(strings.Repeat(",?", len(names)), ",") + "))"
+		for _, n := range names {
+			args = append(args, n)
+		}
+	}
+	q := `UPDATE reviews SET status = ?, started_at = ?, stage = 'starting'
+	  WHERE id = (SELECT id FROM reviews WHERE status = ? AND ` + cond + ` ORDER BY id LIMIT 1) RETURNING id`
 	var id int64
-	err := s.db.QueryRow(`UPDATE reviews SET status = ?, started_at = ?, stage = 'starting'
-	  WHERE id = (SELECT id FROM reviews WHERE status = ? ORDER BY id LIMIT 1) RETURNING id`, Running, now(), Queued).Scan(&id)
+	err := s.db.QueryRow(q, args...).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

@@ -69,7 +69,14 @@ func (d Deps) Current() Deps {
 // Channel is the channel this Deps acts for. Today it is always the single default channel, derived from the current
 // config, so the review and poll paths read per-channel values (orgs now; more later) from a Channel rather than from
 // Cfg directly. Later phases load several channels and give each run its own; this is where that resolves.
-func (d Deps) Channel() config.Channel { return config.DefaultChannel(d.Cfg) }
+// ChannelNames lists the channels this instance runs, for scoping the queue claim to them.
+func (d Deps) ChannelNames() []string {
+	names := make([]string, 0, len(d.Channels))
+	for _, ch := range d.Channels {
+		names = append(names, ch.Name)
+	}
+	return names
+}
 
 // channelFor returns the channel that owns a review: the one named by r.Channel among this instance's channels, or the
 // default channel (today's config) when the review names none or names one this instance does not run.
