@@ -1,4 +1,5 @@
-// Package gh talks to GitHub with the user's existing `gh` login (via go-gh), so no separate token is needed.
+// Package gh talks to GitHub via go-gh. By default it uses the user's existing `gh` login, so no separate token is
+// needed; a channel can instead act under its own identity — a token (NewWithToken) or a GitHub App installation.
 package gh
 
 import (
@@ -76,33 +77,89 @@ type Comment struct {
 	Body string `json:"body"`
 }
 
+// New builds a client from the user's ambient gh login (the GH_TOKEN / GITHUB_TOKEN env vars or the gh CLI config), as
+// the bot has always run.
 func New() (*Client, error) {
-	t := transport()
-	rest, err := api.NewRESTClient(api.ClientOptions{Transport: t, Timeout: callTimeout})
+	return newClientWith(clientOpts{}, transport())
+}
+
+// NewWithToken builds a client that authenticates with token instead of the ambient gh login, so a channel can act
+// under its own GitHub identity (a personal access token, or a GitHub App installation token). It consults no gh
+// config, so it works on a bare server or in CI where `gh auth login` was never run.
+func NewWithToken(token string) (*Client, error) {
+	if token == "" {
+		return nil, fmt.Errorf("github token is empty")
+	}
+	return newClientWith(clientOpts{token: token}, transport())
+}
+
+// NewWithAuth builds a client for an identity that authenticates each request itself — a GitHub App installation,
+// whose short-lived token auth refreshes per call by wrapping gh's transport. login is that identity's own login
+// (e.g. "<app>[bot]"), because such a client cannot call GET /user to learn it.
+func NewWithAuth(auth func(http.RoundTripper) http.RoundTripper, login string) (*Client, error) {
+	if auth == nil || login == "" {
+		return nil, fmt.Errorf("github app client needs an auth transport and a login")
+	}
+	return newClientWith(clientOpts{auth: auth, login: login}, transport())
+}
+
+// clientOpts selects how a client authenticates: nothing (the ambient gh login), a static token, or an auth transport
+// that signs each request (a GitHub App installation). login, when set, is used as-is instead of a GET /user lookup.
+type clientOpts struct {
+	token string                                    // static token; "" = ambient or auth-wrapped
+	auth  func(http.RoundTripper) http.RoundTripper // wraps the transport to authenticate each request; nil = none
+	login string                                    // known login; "" = learn via GET /user
+}
+
+// newClientWith builds the REST, diff, GraphQL and download clients over base (a seam for tests; production passes
+// transport()), then learns the login unless co.login is set.
+func newClientWith(co clientOpts, base http.RoundTripper) (*Client, error) {
+	t := base
+	if co.auth != nil {
+		t = co.auth(base) // the App's per-request token sits outside gh's retry/keepalive transport
+	}
+	// opts applies our transport to every client, and — for a non-ambient identity — a pinned host so go-gh never
+	// falls back to the ambient gh config. A token is used directly; an auth transport sets the real Authorization per
+	// request, so a non-empty placeholder is enough to keep go-gh from erroring on an absent ambient token.
+	opts := func(o api.ClientOptions) api.ClientOptions {
+		o.Transport = t
+		switch {
+		case co.token != "":
+			o.AuthToken, o.Host = co.token, "github.com"
+		case co.auth != nil:
+			o.AuthToken, o.Host = "x", "github.com"
+		}
+		return o
+	}
+	rest, err := api.NewRESTClient(opts(api.ClientOptions{Timeout: callTimeout}))
 	if err != nil {
 		return nil, fmt.Errorf("GitHub login (run `gh auth login`): %w", err)
 	}
-	diff, err := api.NewRESTClient(api.ClientOptions{Transport: t, Timeout: callTimeout,
-		Headers: map[string]string{"Accept": "application/vnd.github.v3.diff"}})
+	diff, err := api.NewRESTClient(opts(api.ClientOptions{Timeout: callTimeout,
+		Headers: map[string]string{"Accept": "application/vnd.github.v3.diff"}}))
 	if err != nil {
 		return nil, err
 	}
-	gql, err := api.NewGraphQLClient(api.ClientOptions{Transport: t, Timeout: callTimeout})
+	gql, err := api.NewGraphQLClient(opts(api.ClientOptions{Timeout: callTimeout}))
 	if err != nil {
 		return nil, err
 	}
 	// No overall limit on a release download, which can be slow; a dead connection still fails on the transport's.
-	dl, err := api.NewHTTPClient(api.ClientOptions{Transport: t, Headers: map[string]string{"Accept": "application/octet-stream"}})
+	dl, err := api.NewHTTPClient(opts(api.ClientOptions{Headers: map[string]string{"Accept": "application/octet-stream"}}))
 	if err != nil {
 		return nil, err
 	}
-	var u struct {
-		Login string `json:"login"`
+	login := co.login
+	if login == "" {
+		var u struct {
+			Login string `json:"login"`
+		}
+		if err := rest.Get("user", &u); err != nil {
+			return nil, fmt.Errorf("GitHub user: %w", err)
+		}
+		login = u.Login
 	}
-	if err := rest.Get("user", &u); err != nil {
-		return nil, fmt.Errorf("GitHub user: %w", err)
-	}
-	return &Client{rest: rest, diff: diff, gql: gql, dl: dl, Login: u.Login}, nil
+	return &Client{rest: rest, diff: diff, gql: gql, dl: dl, Login: login}, nil
 }
 
 // prURL is anchored at the start and takes owner and repo apart, so that only a github.com address parses and

@@ -402,6 +402,26 @@ func TestRouteChannel(t *testing.T) {
 	}
 }
 
+// ClientFor picks a channel's own GitHub client when it has one, else falls back to the ambient GH. A single-identity
+// setup (nil Clients, or a channel absent from it) always gets GH, so nothing changes.
+func TestClientFor(t *testing.T) {
+	ambient := &gh.Client{Login: "ambient"}
+	company := &gh.Client{Login: "company-bot"}
+	d := Deps{GH: ambient, Clients: map[string]*gh.Client{"company": company}}
+	if got := d.ClientFor(&store.Review{Channel: "company"}); got != company {
+		t.Error("a channel with its own client should use it")
+	}
+	if got := d.ClientFor(&store.Review{Channel: "default"}); got != ambient {
+		t.Error("a channel with no own client should fall back to the ambient GH")
+	}
+	if got := d.ClientFor(&store.Review{}); got != ambient {
+		t.Error("no channel should use the ambient GH")
+	}
+	if got := (Deps{GH: ambient}).ClientFor(&store.Review{Channel: "company"}); got != ambient {
+		t.Error("a nil Clients map should fall back to the ambient GH")
+	}
+}
+
 // dataRepo makes a throwaway git-backed record store for the tests below, returning it with its work-tree path.
 func dataRepo(t *testing.T) (*datarepo.Store, string) {
 	t.Helper()
