@@ -96,31 +96,34 @@ func ServeWebhook(ctx context.Context, cfg config.Config) error {
 // owning channel's identity; the data store (when configured) gives idempotency against duplicate deliveries and the
 // last reviewed commit for an incremental re-review.
 func reviewOnce(ctx context.Context, base pipeline.Deps, ev webhook.Event, channel string) {
-	rv := &store.Review{Repo: ev.Repo, Number: ev.Number, HeadSHA: ev.HeadSHA,
-		Status: store.Running, Source: "auto", Channel: channel}
+	if err := reviewPROnce(ctx, base, ev.Repo, ev.Number, ev.HeadSHA, channel, ev.Action); err != nil {
+		log.Printf("webhook: %s#%d: %v", ev.Repo, ev.Number, err)
+	}
+}
+
+// reviewPROnce reviews one PR in an in-memory store under the owning channel, leaving nothing on disk. The git data
+// store (when configured) gives idempotency against repeats and the last-reviewed SHA for an incremental re-review.
+// It is the shared stateless-review path behind both the webhook receiver and poll-once; trigger is a short label for
+// the log (the webhook action, or "poll").
+func reviewPROnce(ctx context.Context, base pipeline.Deps, repo string, number int, headSHA, channel, trigger string) error {
+	rv := &store.Review{Repo: repo, Number: number, HeadSHA: headSHA, Status: store.Running, Source: "auto", Channel: channel}
 	if base.ClientFor(rv) == nil {
-		log.Printf("webhook: %s#%d: channel %q has no GitHub identity (no App or token, and no ambient login), skipping",
-			ev.Repo, ev.Number, channelLabel(channel))
-		return
+		return fmt.Errorf("channel %q has no GitHub identity (no App or token, and no ambient login)", channelLabel(channel))
 	}
 	st, err := store.OpenMemory()
 	if err != nil {
-		log.Printf("webhook: %s#%d: store: %v", ev.Repo, ev.Number, err)
-		return
+		return fmt.Errorf("store: %w", err)
 	}
 	defer st.Close()
 	d := base
 	d.Store = st
-	d.OneShot = true // a webhook review is stateless: no daemon page or desktop notification to point at
+	d.OneShot = true // stateless: no daemon page or desktop notification to point at
 	id, err := st.Insert(rv)
 	if err != nil {
-		log.Printf("webhook: %s#%d: %v", ev.Repo, ev.Number, err)
-		return
+		return err
 	}
-	log.Printf("webhook: reviewing %s#%d (%s) on channel %q", ev.Repo, ev.Number, ev.Action, channelLabel(channel))
-	if err := pipeline.Run(ctx, d, id); err != nil {
-		log.Printf("webhook: %s#%d: %v", ev.Repo, ev.Number, err)
-	}
+	log.Printf("reviewing %s#%d (%s) on channel %q", repo, number, trigger, channelLabel(channel))
+	return pipeline.Run(ctx, d, id)
 }
 
 func channelLabel(name string) string {

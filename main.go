@@ -40,6 +40,8 @@ const usage = `personal-review-bot: reviews PRs where your review is requested d
   personal-review-bot daemon                run the bot (launchd runs this)
   personal-review-bot webhook               serve GitHub pull_request webhooks and review on delivery
                                             (event-driven; GITHUB_WEBHOOK_SECRET required, WEBHOOK_ADDR optional)
+  personal-review-bot poll-once             one stateless poll cycle, then exit (for a cron / scheduled agent;
+                                            DATA_REPO required for cross-run idempotency)
   personal-review-bot review [--dry-run] [--deep] [--ephemeral] <PR-URL>
                                    review one PR now; --dry-run posts nothing and opens nothing;
                                    --deep reviews it as if it were large (Opus, the design review);
@@ -73,6 +75,8 @@ func main() {
 		err = withORG(cfg, func() error { return runDaemon(ctx, cfg) })
 	case "webhook":
 		err = daemon.ServeWebhook(ctx, cfg) // event-driven: routes by channel, not ORG, so it skips withORG
+	case "poll-once":
+		err = daemon.PollOnce(ctx, cfg) // one stateless poll cycle for a scheduled agent / cron; routes by channel
 	case "update":
 		err = updateCmd(ctx, cfg, args)
 	case "review":
