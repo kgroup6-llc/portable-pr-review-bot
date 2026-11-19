@@ -1,4 +1,5 @@
-// Package tui is the terminal view: what's running right now and the last 10 reviews.
+// Package tui is the terminal view: what's running right now, what's waiting for you in the gate, and the last 10
+// reviews, with the daemon's health and the day's spend across the top.
 package tui
 
 import (
@@ -7,6 +8,7 @@ import (
 	"io"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,11 +38,12 @@ var (
 
 type snapshot struct {
 	active, recent []store.Review
+	awaiting       []store.Review          // waiting for you in the gate, most-risky first
+	pending        map[int64]store.Waiting // per review: findings still waiting for you and their top severity
 	lastPoll       time.Time
 	usage          agents.Usage
 	hasUsage       bool
-	spentToday     float64        // on reviews since midnight, dry runs left out (as on the stats page)
-	spentWeek      float64        // in the last 7 days
+	today, week    store.Totals   // reviews since midnight and in the last 7 days (dry runs left out, as on the stats page)
 	update         update.Release // a newer release ("" Version: none)
 	updateState    string         // what an update under way is doing
 	daemonVersion  string         // what the daemon last started as
@@ -55,16 +58,19 @@ func load(st *store.Store) snapshot {
 	if s.err == nil {
 		s.recent, s.err = st.Recent(10)
 	}
+	if s.err == nil {
+		s.awaiting, s.err = st.AwaitingYou()
+	}
+	if s.err == nil {
+		s.pending, s.err = st.PendingByReview()
+	}
+	sortAwaiting(s.awaiting, s.pending)
 	s.lastPoll, _ = time.Parse(time.RFC3339, st.Meta("last_poll"))
 	s.login = st.Meta("login")
 	s.usage, s.hasUsage = pipeline.LoadUsage(st)
 	now := time.Now()
-	if t, err := st.Totals(time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())); err == nil {
-		s.spentToday = t.CostUSD
-	}
-	if t, err := st.Totals(now.AddDate(0, 0, -7)); err == nil {
-		s.spentWeek = t.CostUSD
-	}
+	s.today, _ = st.Totals(time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()))
+	s.week, _ = st.Totals(now.AddDate(0, 0, -7))
 	s.update, _ = update.Available(update.Load(st), version.String())
 	s.updateState = update.State(st)
 	s.daemonVersion = update.DaemonVersion(st)
@@ -175,6 +181,13 @@ func (m model) View() string { return render(m.cfg, m.snap, m.cursor, m.msg, tru
 
 func money(usd float64) string { return fmt.Sprintf("$%.2f", usd) }
 
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
 // cost is a review's price for its column: "–" when it spent nothing (skipped, or failed before any Claude run).
 func cost(usd float64) string {
 	if usd < 0.005 {
@@ -189,6 +202,64 @@ func trunc(s string, n int) string {
 		return s
 	}
 	return string(r[:n-1]) + "…"
+}
+
+// staleReview is how long a review may run before it is almost certainly a dead agent, not real work: even a deep
+// review of a large PR finishes well inside this. Matches the watcher's own stale window.
+const staleReview = 20 * time.Minute
+
+// sevRank orders the severities the reviewers use; -1 for none, so an unranked finding sorts last.
+func sevRank(s string) int {
+	switch s {
+	case "high":
+		return 3
+	case "medium":
+		return 2
+	case "low":
+		return 1
+	}
+	return -1
+}
+
+// sortAwaiting puts the gate in triage order: the highest-severity finding first, then the least-confident review (the
+// one the verifier was least sure about), then the newest, so the review that most needs a human is always on top.
+func sortAwaiting(rs []store.Review, pending map[int64]store.Waiting) {
+	sort.SliceStable(rs, func(i, j int) bool {
+		a, b := sevRank(pending[rs[i].ID].TopSeverity), sevRank(pending[rs[j].ID].TopSeverity)
+		if a != b {
+			return a > b
+		}
+		if rs[i].Approval != rs[j].Approval {
+			return rs[i].Approval < rs[j].Approval
+		}
+		return rs[i].ID > rs[j].ID
+	})
+}
+
+// confidence colours the verifier's approval confidence like a traffic light: sure (≥80) green, unsure (≤40) red.
+func confidence(pct int) string {
+	s := fmt.Sprintf("%d%%", pct)
+	switch {
+	case pct >= 80:
+		return okStyle.Render(s)
+	case pct <= 40:
+		return badStyle.Render(s)
+	default:
+		return needStyle.Render(s)
+	}
+}
+
+// sevLabel colours a severity word (the top one waiting in a review): high red, medium amber, low dim.
+func sevLabel(sev string) string {
+	switch sev {
+	case "high":
+		return badStyle.Render(sev)
+	case "medium":
+		return needStyle.Render(sev)
+	case "low":
+		return dim.Render(sev)
+	}
+	return dim.Render("—")
 }
 
 // usageLine shows how full the Claude plan's limits are, and whether reviews are saving because of it.
@@ -246,9 +317,17 @@ func header(cfg config.Config, s snapshot, interactive bool, width, height int) 
 	if withLogo {
 		title = "personal-review-bot"
 	}
+	// Three states, not two: a fresh heartbeat is healthy, one poll interval late is a warning (a slow or busy tick,
+	// still recoverable), and well past that the daemon has stopped. The middle state is the one the old binary view
+	// hid — it reads as "down" to a person watching, when the daemon is usually just mid-review.
 	daemon := badStyle.Render("● daemon not running")
-	if !s.lastPoll.IsZero() && time.Since(s.lastPoll) < 2*cfg.PollInterval+30*time.Second {
-		daemon = okStyle.Render(fmt.Sprintf("● watching (checked %s ago)", time.Since(s.lastPoll).Round(time.Second)))
+	if age := time.Since(s.lastPoll); !s.lastPoll.IsZero() {
+		switch {
+		case age < cfg.PollInterval+15*time.Second:
+			daemon = okStyle.Render(fmt.Sprintf("● watching (checked %s ago)", age.Round(time.Second)))
+		case age < 2*cfg.PollInterval+30*time.Second:
+			daemon = needStyle.Render(fmt.Sprintf("● watching · last check %s ago (late)", age.Round(time.Second)))
+		}
 	}
 	rule := "auto-post off"
 	if sev := cfg.AutoPostSeverities(); sev != "" {
@@ -260,7 +339,9 @@ func header(cfg config.Config, s snapshot, interactive bool, width, height int) 
 	}
 	lines := []string{titleStyle.Render(title) + " " + dim.Render(version.String()) + acting, daemon,
 		dim.Render(rule + " · " + cfg.WebURL())}
-	lines = append(lines, dim.Render(fmt.Sprintf("spend: today %s · 7 days %s", money(s.spentToday), money(s.spentWeek))))
+	lines = append(lines, dim.Render(fmt.Sprintf("today: %s · %s · %s   7 days: %s · %s · %s",
+		plural(s.today.Reviews, "review", "reviews"), plural(s.today.Posted(), "finding posted", "findings posted"), money(s.today.CostUSD),
+		plural(s.week.Reviews, "review", "reviews"), plural(s.week.Posted(), "finding posted", "findings posted"), money(s.week.CostUSD))))
 	if s.hasUsage {
 		lines = append(lines, strings.TrimSuffix(usageLine(cfg, s.usage, time.Now()), "\n"))
 	}
@@ -287,9 +368,15 @@ func render(cfg config.Config, s snapshot, cursor int, msg string, interactive b
 		b.WriteString(dim.Render("  nothing running") + "\n")
 	}
 	for _, r := range s.active {
-		elapsed := ""
+		elapsed, stuck := "", ""
 		if !r.StartedAt.IsZero() && r.Status == store.Running {
-			elapsed = " · " + time.Since(r.StartedAt).Round(time.Second).String()
+			running := time.Since(r.StartedAt)
+			elapsed = " · " + running.Round(time.Second).String()
+			// A review this old has almost certainly lost its agent: the row would otherwise sit "running" forever
+			// with no hint it is dead. Flag it so a person knows to re-review (r) rather than keep waiting.
+			if running > staleReview {
+				stuck = " " + badStyle.Render("⚠ stuck? the agent may have died — r to review again")
+			}
 		}
 		if it := web.IterationLabel(r); it != "" {
 			elapsed += " · " + it
@@ -297,8 +384,36 @@ func render(cfg config.Config, s snapshot, cursor int, msg string, interactive b
 		if r.CostUSD > 0 {
 			elapsed += " · " + money(r.CostUSD) + " so far"
 		}
-		fmt.Fprintf(&b, "  %s %s %s\n", runStyle.Render(web.StatusLabel(r)),
-			fmt.Sprintf("%s#%d %s", short(r.Repo), r.Number, trunc(r.Title, 50)), dim.Render(r.Tier+elapsed))
+		fmt.Fprintf(&b, "  %s %s %s%s\n", runStyle.Render(web.StatusLabel(r)),
+			fmt.Sprintf("%s#%d %s", short(r.Repo), r.Number, trunc(r.Title, 50)), dim.Render(r.Tier+elapsed), stuck)
+	}
+
+	// The gate: reviews the bot finished but did not auto-post, so they are waiting for you to agree or skip. These are
+	// the output tray — the whole point of the run — so they get their own block, riskiest first, and never scroll off
+	// the way they can when they are only tinted inside LAST 10.
+	gate := headStyle.Render("WAITING FOR YOU")
+	if len(s.awaiting) > 0 {
+		gate = needStyle.Render("WAITING FOR YOU") + needStyle.Render(fmt.Sprintf("   %d", len(s.awaiting)))
+	}
+	b.WriteString("\n" + gate + "\n")
+	if len(s.awaiting) == 0 {
+		b.WriteString(dim.Render("  nothing waiting — the bot auto-posted or found nothing") + "\n")
+	}
+	for _, r := range s.awaiting {
+		p := s.pending[r.ID]
+		found := dim.Render("no findings")
+		if p.Count > 0 {
+			found = fmt.Sprintf("%s · top %s", plural(p.Count, "finding", "findings"), sevLabel(p.TopSeverity))
+		}
+		pr := fmt.Sprintf("%s#%d", short(r.Repo), r.Number)
+		if r.Reran() {
+			pr += " · " + web.Ordinal(r.Iteration)
+		}
+		fmt.Fprintf(&b, "  %-26s %-16s %s  %s  %s %s\n", trunc(pr, 26), trunc("@"+r.Author, 16),
+			confidence(r.Approval), found, cost(r.CostUSD), dim.Render("· "+agoShort(r.CreatedAt)))
+		if d := strings.TrimSpace(r.Decision); d != "" {
+			b.WriteString("    " + dim.Render(trunc(d, max(40, width-6))) + "\n")
+		}
 	}
 
 	b.WriteString("\n" + headStyle.Render("LAST 10") + "\n")

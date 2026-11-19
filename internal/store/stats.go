@@ -42,6 +42,36 @@ func (s *Store) Totals(since time.Time) (Totals, error) {
 	return t, err
 }
 
+// Waiting is how many findings a review has waiting for you (status pending) and the highest severity among them, so a
+// view can show the gate at a glance without loading every finding.
+type Waiting struct {
+	Count       int
+	TopSeverity string // high | medium | low | "" (none ranked)
+}
+
+// PendingByReview returns, per review id, the findings still waiting for you and their top severity. One query over the
+// gate, so a live view can label each waiting review without an N+1 over findings.
+func (s *Store) PendingByReview() (map[int64]Waiting, error) {
+	rows, err := s.db.Query(`SELECT review_id, count(*),
+	  max(CASE severity WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END)
+	  FROM findings WHERE status = ? GROUP BY review_id`, Pending)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	rank := map[int]string{3: "high", 2: "medium", 1: "low"}
+	out := map[int64]Waiting{}
+	for rows.Next() {
+		var id int64
+		var n, top int
+		if err := rows.Scan(&id, &n, &top); err != nil {
+			return nil, err
+		}
+		out[id] = Waiting{Count: n, TopSeverity: rank[top]}
+	}
+	return out, rows.Err()
+}
+
 // ReviewerRow is what one reviewer (or the verifier) has done and cost.
 type ReviewerRow struct {
 	Agent                                     string

@@ -581,3 +581,39 @@ func mustCheck(t *testing.T, s *Store, before, since string) []PostedFinding {
 	}
 	return due
 }
+
+// PendingByReview counts only the findings still waiting for you, per review, and reports the top severity among them.
+func TestPendingByReview(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "reviews.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	r1, _ := s.Insert(&Review{Repo: "o/r", Number: 1, Status: AwaitingYou})
+	r2, _ := s.Insert(&Review{Repo: "o/r", Number: 2, Status: AwaitingYou})
+	add := func(rid int64, sev, status string) {
+		if _, err := s.AddFinding(&Finding{ReviewID: rid, Agent: "logic", Path: "a", Line: 1, Severity: sev, Title: "t",
+			Comment: "c", Status: status}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add(r1, "low", Pending)
+	add(r1, "high", Pending)
+	add(r1, "medium", Posted) // already posted: no longer waiting
+	add(r2, "medium", Pending)
+	add(r2, "high", Rejected) // the verifier threw it out: not waiting
+
+	got, err := s.PendingByReview()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := got[r1]; w.Count != 2 || w.TopSeverity != "high" {
+		t.Errorf("r1 = %+v, want {Count:2 TopSeverity:high}", w)
+	}
+	if w := got[r2]; w.Count != 1 || w.TopSeverity != "medium" {
+		t.Errorf("r2 = %+v, want {Count:1 TopSeverity:medium}", w)
+	}
+	if _, ok := got[999]; ok {
+		t.Errorf("a review with no pending findings should be absent, got %+v", got[999])
+	}
+}
