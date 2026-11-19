@@ -419,6 +419,7 @@ type statsPage struct {
 	Since                      time.Time
 	Decisions                  []store.DecisionRow
 	Edits                      store.Edits
+	Downstream                 store.DownstreamMix
 	Tiers, Models, Repos       []store.CostRow
 	Threshold, SaveAt, MinAt   int
 	AutoPost                   string // e.g. "low or medium"
@@ -432,7 +433,7 @@ func (s *server) stats(w http.ResponseWriter, r *http.Request) {
 	st, now := s.d.Store, time.Now()
 	p := statsPage{Threshold: s.cfg().Threshold, SaveAt: s.cfg().SaveAt, MinAt: s.cfg().MinAt,
 		AutoPost: s.cfg().AutoPostSeverities()}
-	var errs [9]error
+	var errs [10]error
 	p.Week, errs[0] = st.Totals(now.AddDate(0, 0, -7))
 	p.All, errs[1] = st.Totals(time.Time{})
 	p.Days, errs[2] = st.DailySpend(14, now)
@@ -442,6 +443,7 @@ func (s *server) stats(w http.ResponseWriter, r *http.Request) {
 	p.Models, errs[6] = st.Models()
 	p.Repos, errs[7] = st.Repos(10)
 	p.Edits, errs[8] = st.PostedEdits()
+	p.Downstream, errs[9] = st.DownstreamMix()
 	if err := errors.Join(errs[:]...); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
