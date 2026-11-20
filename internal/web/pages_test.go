@@ -95,7 +95,7 @@ func TestIndexLive(t *testing.T) {
 	want(t, page, `<a class="brand" href="/"><svg`, "</svg>personal-review-bot</a>", "<title>(2) personal-review-bot</title>",
 		`<meta http-equiv="refresh" content="60; url=?">`, `<h2 id="running-h" class="vh">Running</h2>`,
 		`data-running-pill data-status="running"`, `<span class="count-n">1</span> running`,
-		`href="/pr/acme/infra/3"`, ">infra#3<", `<a href="/history">All reviews</a>`, `<span class="count need">2</span>`)
+		`href="/pr/acme/infra/3"`, ">infra#3<", `<a href="/history">All reviews</a>`, `<h2 id="needs" class="vh">Needs you (2)</h2>`)
 	if strings.Contains(page, ">acme/infra#") {
 		t.Error("lists should show the repo without its owner")
 	}
