@@ -65,7 +65,11 @@ type Review struct {
 	// approving, and ApprovalReason why ("" = it gave none).
 	Approval       int
 	ApprovalReason string
-	Labels         []string // the PR's labels the page shows beside its size (SHOW_LABELS), e.g. risk/high
+	// PRRisk and ProdRisk are the verifier's 0-10 ratings of how risky the change is to land (review risk) and to
+	// production (blast radius if it's wrong), higher = riskier. -1 means not scored: an old review, or one still running.
+	PRRisk   int
+	ProdRisk int
+	Labels   []string // the PR's labels the page shows beside its size (SHOW_LABELS), e.g. risk/high
 	Decision       string
 	Error          string
 	Reasons        string // why triage picked the tier and models
@@ -214,6 +218,8 @@ func openDSN(dsn string) (*Store, error) {
 		{"reviews", "about", "TEXT NOT NULL DEFAULT ''"},
 		{"reviews", "approval", "INTEGER NOT NULL DEFAULT 0"},
 		{"reviews", "approval_reason", "TEXT NOT NULL DEFAULT ''"},
+		{"reviews", "pr_risk", "INTEGER NOT NULL DEFAULT -1"},
+		{"reviews", "prod_risk", "INTEGER NOT NULL DEFAULT -1"},
 		{"reviews", "labels", "TEXT NOT NULL DEFAULT ''"},
 		{"reviews", "channel", "TEXT NOT NULL DEFAULT ''"},
 		{"findings", "context", "TEXT NOT NULL DEFAULT ''"},
@@ -299,7 +305,7 @@ func (s *Store) CSRFToken() (string, error) {
 // ── reviews ──────────────────────────────────────────────────────────────────
 
 const reviewCols = `id, repo, number, url, title, author, head_sha, status, stage, tier, models, additions, deletions,
-  files, source, channel, dry_run, deep, summary, about, approval, approval_reason, labels, decision, error, reasons, cost_usd, created_at, started_at, finished_at,
+  files, source, channel, dry_run, deep, summary, about, approval, approval_reason, pr_risk, prod_risk, labels, decision, error, reasons, cost_usd, created_at, started_at, finished_at,
   (SELECT count(*) FROM reviews p WHERE p.repo = reviews.repo AND p.number = reviews.number AND p.id < reviews.id
     AND p.tier <> '' AND p.dry_run = 0) + 1,
   coalesce((SELECT state || char(31) || by || char(31) || changed_at || char(31) || checked_at FROM prs
@@ -310,7 +316,7 @@ func scanReview(row interface{ Scan(...any) error }) (*Review, error) {
 	var dry, deep int
 	var created, started, finished, labels, pr string
 	err := row.Scan(&r.ID, &r.Repo, &r.Number, &r.URL, &r.Title, &r.Author, &r.HeadSHA, &r.Status, &r.Stage, &r.Tier,
-		&r.Models, &r.Additions, &r.Deletions, &r.Files, &r.Source, &r.Channel, &dry, &deep, &r.Summary, &r.About, &r.Approval, &r.ApprovalReason, &labels, &r.Decision, &r.Error,
+		&r.Models, &r.Additions, &r.Deletions, &r.Files, &r.Source, &r.Channel, &dry, &deep, &r.Summary, &r.About, &r.Approval, &r.ApprovalReason, &r.PRRisk, &r.ProdRisk, &labels, &r.Decision, &r.Error,
 		&r.Reasons, &r.CostUSD, &created, &started, &finished, &r.Iteration, &pr)
 	if err != nil {
 		return nil, err
@@ -512,6 +518,12 @@ func (s *Store) SetLabels(id int64, labels []string) error {
 // SetApproval records the verifier's confidence in approving, and why.
 func (s *Store) SetApproval(id int64, confidence int, reason string) error {
 	_, err := s.db.Exec(`UPDATE reviews SET approval = ?, approval_reason = ? WHERE id = ?`, confidence, reason, id)
+	return err
+}
+
+// SetRisk records the verifier's PR-risk and production-risk ratings (0-10 each; higher = riskier).
+func (s *Store) SetRisk(id int64, prRisk, prodRisk int) error {
+	_, err := s.db.Exec(`UPDATE reviews SET pr_risk = ?, prod_risk = ? WHERE id = ?`, prRisk, prodRisk, id)
 	return err
 }
 

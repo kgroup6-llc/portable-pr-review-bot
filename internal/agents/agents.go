@@ -115,8 +115,10 @@ const findingsSchema = `{"type":"object","required":["checked","findings"],"prop
   "title":{"type":"string"},"comment":{"type":"string"},"confidence":{"type":"integer","minimum":0,"maximum":100}}}}}}`
 
 const verdictsSchema = `{"type":"object","required":["summary","verdicts","approval"],"properties":{"summary":{"type":"string"},
-  "approval":{"type":"object","required":["confidence","reason"],"properties":{
-  "confidence":{"type":"integer","minimum":0,"maximum":100},"reason":{"type":"string","minLength":20}}},
+  "approval":{"type":"object","required":["confidence","pr_risk","prod_risk","reason"],"properties":{
+  "confidence":{"type":"integer","minimum":0,"maximum":100},
+  "pr_risk":{"type":"integer","minimum":0,"maximum":10},"prod_risk":{"type":"integer","minimum":0,"maximum":10},
+  "reason":{"type":"string","minLength":20}}},
   "verdicts":{"type":"array","items":{"type":"object","required":["id","verdict","certainty","severity","comment","line"],
   "properties":{"id":{"type":"integer"},"verdict":{"enum":["confirmed","plausible","rejected"]},
   "certainty":{"type":"integer","minimum":0,"maximum":100},"severity":{"enum":["high","medium","low"]},
@@ -289,6 +291,8 @@ type Verification struct {
 // the reviewers missed in what the diff changes. The reason names what it rests on and the biggest gap left.
 type Approval struct {
 	Confidence int    `json:"confidence"`
+	PRRisk     int    `json:"pr_risk"`   // 0-10: how risky the change is to land
+	ProdRisk   int    `json:"prod_risk"` // 0-10: blast radius if it's wrong in production
 	Reason     string `json:"reason"`
 }
 
