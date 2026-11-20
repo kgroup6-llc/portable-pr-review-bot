@@ -442,6 +442,23 @@
   .gcount.red { color: var(--red); background: var(--bad-soft); }
   .tray { display: flex; flex-direction: column; gap: 12px; }
 
+  /* view toggle + swipe mode */
+  .segbtn { font-family: var(--mono); font-weight: 700; font-size: 12px; color: var(--sub); background: var(--mantle);
+    border: 1px solid var(--s1); border-radius: 7px; padding: 5px 12px; cursor: pointer; white-space: nowrap; }
+  .segbtn[aria-pressed="true"] { background: var(--mauve); border-color: var(--mauve); color: var(--crust); }
+  .segbtn:not([aria-pressed="true"]):hover { color: var(--text); }
+  .swbar { display: none; }
+  .dispatch[data-view="swipe"] .swbar { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .swbar .swcount { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--sub); }
+  .swbar .swhint { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-left: auto; }
+  .dispatch[data-view="swipe"] .tray { display: block; position: relative; }
+  .dispatch[data-view="swipe"] .tray .ticket { display: none; touch-action: pan-y; }
+  .dispatch[data-view="swipe"] .tray .ticket.top { display: flex; }
+  .dispatch[data-view="swipe"] .tray.multi .ticket.top {
+    box-shadow: 7px 7px 0 -2px var(--base), 8px 8px 0 -2px var(--s0), 14px 14px 0 -4px var(--base), 15px 15px 0 -4px var(--s0); }
+  .dispatch[data-view="swipe"] .tray .ticket.drag { transition: none; cursor: grabbing; }
+  .dispatch[data-view="swipe"] .tray .ticket.top:not(.drag) { transition: transform .28s cubic-bezier(.2,.8,.3,1), opacity .28s; }
+
   /* ticket */
   .ticket { display: flex; background: var(--d-paper); border: 1px solid var(--s0); border-radius: 10px; overflow: hidden; }
   .ticket .stub { flex: none; width: 30px; display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--s0); }
@@ -509,6 +526,9 @@
   .dfinding .loc { font-family: var(--mono); font-size: 12px; color: var(--sub); } .dfinding .fnote { margin: 0; font-size: 13px; color: var(--text); line-height: 1.5; }
   .dclean { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--sub); margin-bottom: 12px; } .dclean .ck { color: var(--green); font-weight: 700; }
   .dmore { font-family: var(--mono); font-size: 12px; }
+  .detailscore { margin: 16px 0 8px; max-width: 760px; }
+  .detailscore .scores { margin-bottom: 11px; }
+  .scorewhy { font-size: 13px; color: var(--sub); margin: 10px 0 0; line-height: 1.5; max-width: 72ch; }
 
   /* actions */
   .tkacts { display: flex; align-items: center; gap: 9px; padding: 11px 15px; border-top: 1px dashed var(--s1); background: color-mix(in srgb, var(--mantle) 55%, var(--d-paper)); }
@@ -733,7 +753,9 @@
 
   <section class="sect dispatch" aria-labelledby="needs">
     <h2 id="needs" class="h2">Needs you{{with .Waiting}} <span class="count need">{{len .}}</span>{{end}}</h2>
-    <div class="inbar"><span class="seglabel">Clearance score</span>
+    <div class="inbar"><span class="seglabel">View:</span>
+      <button class="segbtn" id="m-scroll" data-view="scroll" aria-pressed="true" title="Scrolling list">Scroll</button>
+      <button class="segbtn" id="m-swipe" data-view="swipe" aria-pressed="false" title="One card at a time">Swipe</button>
       <div class="infowrap" id="scoreinfo">
         <button class="infobtn" id="scoreinfo-btn" aria-label="How the score works" aria-expanded="false">i</button>
         <div class="infopop" role="tooltip">
@@ -750,6 +772,7 @@
     {{range .Lanes}}<div class="group">
       <div class="group-head"><h2><span class="bar"></span>{{.Title}}<span class="gcount {{.Key}}">{{len .Cards}}</span></h2><span class="sub">{{.Sub}}</span></div>
       <div class="tray">{{range .Cards}}{{template "d-ticket" (dict "C" . "Token" $.Token)}}{{end}}</div>
+      <div class="swbar"><button class="btn sub swlater" type="button">← Later</button><span class="swcount"></span><span class="swhint">drag the card, or use its buttons</span></div>
     </div>{{else}}<div class="empty">Nothing waiting for you.</div>{{end}}
     {{with .ClosedOut}}<div class="closedout"><p class="sub">No longer waiting for you: merged or closed on GitHub before you decided.</p>
       <ul>{{range .}}<li>{{template "pr-icon" .PR}}<a href="/r/{{.ID}}">{{.Title}}</a>
@@ -811,6 +834,17 @@
       {{if and .R.Deep (not .R.Tier)}}<span class="tag deep">deep review</span>{{end}}
       {{if .R.DryRun}}<span class="tag">dry run: nothing goes to GitHub</span>{{end}}</div>
   </div>
+
+  {{if .R.Approval}}<div class="dispatch detailscore">
+    <div class="scores">
+      <span class="spill {{.R.ConfBand}}"><span class="pl">confidence</span>{{.R.Approval}}%</span>
+      {{if ge .R.PRRisk 0}}<span class="spill {{.R.PRBand}}"><span class="pl">PR risk</span>{{.R.PRRisk}}/10</span><span class="spill {{.R.ProdBand}}"><span class="pl">prod risk</span>{{.R.ProdRisk}}/10</span>{{end}}
+      <span class="spill {{timeBand .R.Took}}"><span class="pl">time</span>{{took .R}}</span>
+      <span class="spill {{costBand .R.CostUSD}}"><span class="pl">cost</span>{{money .R.CostUSD}}</span>
+    </div>
+    {{template "d-score" .R.Clearance}}
+    {{with .R.ApprovalReason}}<p class="scorewhy">{{.}}</p>{{end}}
+  </div>{{end}}
 
   {{with .Msg}}<div class="callout">{{.}}</div>{{end}}
   {{if .Stale}}<div class="callout warn">New commits since this review: it covered <code>{{short .R.HeadSHA}}</code>, the PR is now at
