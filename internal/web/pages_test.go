@@ -93,7 +93,7 @@ func TestIndexLive(t *testing.T) {
 	s.review(3, store.Running, "")
 	_, page := s.get("/")
 	want(t, page, `<a class="brand" href="/"><svg`, "</svg>personal-review-bot</a>", "<title>(2) personal-review-bot</title>",
-		`<meta http-equiv="refresh" content="60; url=?">`, `<h2 id="running-h" class="h2">Running</h2>`,
+		`<meta http-equiv="refresh" content="60; url=?">`, `<h2 id="running-h" class="vh">Running</h2>`,
 		`data-running-pill data-status="running"`, `<span class="count-n">1</span> running`,
 		`href="/pr/acme/infra/3"`, ">infra#3<", `<a href="/history">All reviews</a>`, `<span class="count need">2</span>`)
 	if strings.Contains(page, ">acme/infra#") {

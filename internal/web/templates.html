@@ -549,6 +549,19 @@
   .dmini { display: flex; align-items: center; gap: 12px; background: var(--d-paper); border: 1px solid var(--s0); border-left: 3px solid var(--s2); border-radius: 6px; padding: 9px 12px; }
   .dmini .mid { font-family: var(--mono); font-size: 13px; color: var(--text); font-weight: 700; }
   .dmini .note { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--sub); }
+  .runsect { margin-top: 24px; }
+  .line-head .rsub { color: var(--dim); font-weight: 400; }
+  .rdot { width: 8px; height: 8px; border-radius: 50%; background: var(--mauve); flex: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mauve) 22%, transparent); animation: rpulse 1.6s ease-in-out infinite; }
+  @keyframes rpulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .rdot { animation: none; } }
+  .rwork { background: var(--d-paper); border: 1px solid var(--s0); border-left: 3px solid var(--mauve); border-radius: 8px; padding: 11px 13px; }
+  .rwork-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 9px; }
+  .rwork-head .mid { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text); }
+  .rwork-head .rtitle { font-weight: 600; color: var(--text); }
+  .rwork-head .rtitle:hover { text-decoration: underline; }
+  .rwork-head .rspace { flex: 1 1 16px; }
+  .rwork-head .rcost { font-family: var(--mono); font-size: 12px; color: var(--sub); }
   @media (max-width: 640px) { .tkrow { flex-direction: column; } .tkside { flex-direction: row-reverse; align-items: center; justify-content: flex-start; } .insp { transform: none; } }
 </style></head><body>
 {{template "top" .}}{{end}}
@@ -779,20 +792,23 @@
         <span class="sub"><span class="mono">{{repoName .Repo}}#{{.Number}}</span> · {{prTitle .PR}}</span></li>{{end}}</ul></div>{{end}}
   </section>
 
-  <div data-running-all>{{if .Active}}<section class="sect" id="running" aria-labelledby="running-h">
-    <h2 id="running-h" class="h2">Running</h2>
-    {{range .Active}}<article class="card stack">
-      <div class="headrow">
-        <div class="main">
-          <a class="ttl" href="/r/{{.ID}}">{{.Title}}</a>
-          <div class="meta"><a class="mono pr" href="{{timeline .Repo .Number}}" title="{{.Repo}}: every review of this PR">{{repoName .Repo}}#{{.Number}}</a>
-            <span>by <b>@{{.Author}}</b></span>{{if .Deep}}<span class="tag deep">deep review</span>{{end}}{{with iteration .}}<span>{{.}}</span>{{end}}{{template "labels" .Labels}}{{template "channel-tag" .Channel}}{{if .CostUSD}}<span>{{money .CostUSD}} so far</span>{{end}}</div>
-        </div>
-        {{template "gh-pr-small" .URL}}
+  <div data-running-all>{{if .Active}}<section class="dispatch runsect" id="running" aria-labelledby="running-h">
+    <h2 id="running-h" class="vh">Running</h2>
+    <div class="line">
+      <div class="line-head"><span class="rdot"></span>On the line<span class="n">{{len .Active}}</span><span class="rsub">· Agent-K is reviewing</span></div>
+      <div class="feed">
+        {{range .Active}}<article class="rwork">
+          <div class="rwork-head">
+            <a class="mid" href="{{timeline .Repo .Number}}" title="{{.Repo}}: every review of this PR">{{repoName .Repo}}#{{.Number}}</a>
+            <a class="rtitle" href="/r/{{.ID}}">{{.Title}}</a>
+            {{if .Deep}}<span class="tag deep">deep</span>{{end}}{{template "labels" .Labels}}{{template "channel-tag" .Channel}}
+            <span class="rspace"></span>{{if .CostUSD}}<span class="rcost">{{money .CostUSD}} so far</span>{{end}}{{template "gh-pr-small" .URL}}
+          </div>
+          {{template "running-line" .}}
+          {{template "steps" .}}
+        </article>{{end}}
       </div>
-      {{template "running-line" .}}
-      {{template "steps" .}}
-    </article>{{end}}
+    </div>
   </section>{{end}}</div>
 
   {{if .Failed}}<section class="sect" aria-labelledby="failed">
