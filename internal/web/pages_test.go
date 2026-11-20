@@ -93,7 +93,7 @@ func TestIndexLive(t *testing.T) {
 	s.review(3, store.Running, "")
 	_, page := s.get("/")
 	want(t, page, `<a class="brand" href="/"><svg`, "</svg>personal-review-bot</a>", "<title>(2) personal-review-bot</title>",
-		`<meta http-equiv="refresh" content="60; url=?">`, `<h2 id="running-h" class="h2">Running</h2>`,
+		`<meta http-equiv="refresh" content="60; url=?">`, `<h2 id="running-h" class="vh">Running</h2>`,
 		`data-running-pill data-status="running"`, `<span class="count-n">1</span> running`,
 		`href="/pr/acme/infra/3"`, ">infra#3<", `<a href="/history">All reviews</a>`, `<span class="count need">2</span>`)
 	if strings.Contains(page, ">acme/infra#") {
@@ -306,7 +306,7 @@ func TestIterationLabel(t *testing.T) {
 		t.Error("a first review carries no iteration label")
 	}
 	_, page = s.get("/")
-	want(t, page, "· @dev · 2nd iteration · new commits ·", `<span>2nd iteration · new commits</span>`)
+	want(t, page, "@dev", "2nd iteration · new commits")
 	_, page = s.get("/pr/acme/infra/12")
 	want(t, page, "<span>1st iteration</span>", "<span>2nd iteration</span>")
 }
@@ -814,7 +814,9 @@ func TestLabelledButtons(t *testing.T) {
 		}
 	}
 	_, page = s.get("/")
-	want(t, page, button, `>Open review</a>`, fmt.Sprintf(`<a class="glink" href="%s" target="_blank" rel="noopener">`, url), `</svg>GitHub<svg class="ext"`)
+	want(t, page, fmt.Sprintf(`<a class="tkgh" href="%s" target="_blank" rel="noopener"`, url),
+		fmt.Sprintf(`<a class="btn hero" href="/r/%d">Open review →</a>`, id), // unscored (approval 0) → needs-you lane
+		fmt.Sprintf(`<a class="glink" href="%s" target="_blank" rel="noopener">`, url), `</svg>GitHub<svg class="ext"`)
 	_, page = s.get("/pr/acme/infra/70")
 	want(t, page, button)
 }

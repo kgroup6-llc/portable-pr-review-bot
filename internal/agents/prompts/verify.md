@@ -47,6 +47,12 @@ give the approval from your own check.
   no reviewer's account below covers, a file too large to read, behaviour you couldn't confirm from the code. 90 or
   more means you would approve it yourself; below 70 means @{{.Owner}} should look before approving.
 - `reason`: one sentence for @{{.Owner}}: what the confidence rests on, and the biggest gap left, if any.
+- `pr_risk` 0–10: how risky this change is to land — how much could go wrong in what it touches. Weigh the size and
+  spread of the diff, how much behaviour it changes, how testable it is, and how many findings there are and how
+  severe. 0–3 is a small, safe change; 4–6 a normal one worth a look; 7–10 a large or delicate one.
+- `prod_risk` 0–10: the blast radius if this is wrong in production — how much breaks and how hard it is to undo.
+  Payments, auth, data migrations, deploy and rollback paths, and anything customer-facing score high; docs, tests,
+  internal tooling, and easily-reverted changes score low. Judge the area it touches, not your confidence in the review.
 
 What each reviewer says it examined:
 {{.Accounts}}

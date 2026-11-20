@@ -411,8 +411,11 @@ func Run(ctx context.Context, d Deps, id int64) (err error) {
 	saveRun(d, id, agents.VerifierAgent, plan.VerifierModel, len(ver.Verdicts), run, err)
 	if err != nil {
 		d.Log("%s: verifier failed, its %d finding(s) go to the confirmation page unverified: %v", tag, len(cands), err)
-	} else if ver.Approval.Reason != "" {
-		_ = d.Store.SetApproval(id, ver.Approval.Confidence, ver.Approval.Reason)
+	} else {
+		if ver.Approval.Reason != "" {
+			_ = d.Store.SetApproval(id, ver.Approval.Confidence, ver.Approval.Reason)
+		}
+		_ = d.Store.SetRisk(id, ver.Approval.PRRisk, ver.Approval.ProdRisk)
 	}
 	summary := ver.Summary
 	for _, v := range ver.Verdicts {

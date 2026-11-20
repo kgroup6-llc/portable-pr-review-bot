@@ -399,6 +399,170 @@
                  justify-content: space-between; gap: 12px 32px; font-size: 13px; color: var(--sub); }
   .foot .links { display: flex; flex-wrap: wrap; gap: 6px 18px; }
   @media (max-width: 640px) { .top { padding: 10px 16px; } main.page { padding: 24px 16px 48px; } .foot .inner { padding: 20px 16px 28px; } }
+
+  /* ───────────────────────── Agent-K dispatch inbox ───────────────────────── */
+  .dispatch { --d-paper: color-mix(in srgb, var(--s0) 34%, var(--base)); --d-panel: color-mix(in srgb, var(--s0) 55%, var(--base));
+    --d-line: var(--s0); --d-steel: var(--s1); --d-accent: var(--mauve);
+    --good: var(--green); --mid: var(--yellow); --bad: var(--red);
+    --good-soft: color-mix(in srgb, var(--green) 15%, transparent); --mid-soft: color-mix(in srgb, var(--yellow) 15%, transparent);
+    --bad-soft: color-mix(in srgb, var(--red) 15%, transparent); font-variant-numeric: tabular-nums; }
+  .dispatch .lede { max-width: 70ch; }
+
+  /* info bar above the lanes */
+  .inbar { display: flex; align-items: center; gap: 10px; margin: 18px 0 2px; }
+  .inbar .seglabel { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  .infowrap { margin-left: auto; position: relative; }
+  .infobtn { font-weight: 800; font-style: italic; font-size: 14px; width: 24px; height: 24px; border-radius: 50%;
+    border: 1px solid var(--s1); background: var(--mantle); color: var(--sub); cursor: pointer; display: grid; place-items: center; }
+  .infobtn:hover, .infowrap.open .infobtn { color: var(--text); border-color: var(--s2); }
+  .infopop { position: absolute; top: 31px; right: 0; z-index: 30; width: 290px; max-width: 80vw; background: var(--mantle);
+    border: 1px solid var(--s1); border-radius: 10px; box-shadow: 0 12px 30px -10px rgba(0,0,0,.7); padding: 13px 14px;
+    opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .14s, transform .14s, visibility .14s; }
+  .infowrap:hover .infopop, .infowrap.open .infopop { opacity: 1; visibility: visible; transform: translateY(0); }
+  .infopop::before { content: ""; position: absolute; top: -6px; right: 8px; width: 10px; height: 10px; background: var(--mantle);
+    border-left: 1px solid var(--s1); border-top: 1px solid var(--s1); transform: rotate(45deg); }
+  .infopop h4 { font-family: var(--mono); font-size: 11px; letter-spacing: .13em; text-transform: uppercase; color: var(--dim); margin: 0 0 7px; }
+  .infopop p { font-size: 13px; line-height: 1.5; color: var(--sub); margin: 0 0 9px; }
+  .infopop b { color: var(--text); }
+  .infopop .wt { display: flex; flex-direction: column; gap: 3px; margin: 0 0 9px; font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .infopop .wt i { font-style: normal; color: var(--dim); }
+  .infopop .bnd { display: flex; gap: 7px; align-items: center; font-family: var(--mono); font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .infopop .bnd b { color: var(--text); } .infopop .sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+
+  /* lanes */
+  .group { margin-top: 22px; }
+  .group-head { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; }
+  .group-head h2 { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--sub);
+    font-weight: 700; margin: 0; display: flex; align-items: center; gap: 9px; }
+  .group-head .bar { width: 16px; height: 2px; background: currentColor; }
+  .group-head .sub { font-size: 12px; color: var(--dim); }
+  .gcount { font-family: var(--mono); font-weight: 700; font-size: 12px; padding: 1px 8px; border-radius: 4px; }
+  .gcount.green { color: var(--green); background: var(--good-soft); }
+  .gcount.amber { color: var(--yellow); background: var(--mid-soft); }
+  .gcount.red { color: var(--red); background: var(--bad-soft); }
+  .tray { display: flex; flex-direction: column; gap: 12px; }
+
+  /* view toggle + swipe mode */
+  .segbtn { font-family: var(--mono); font-weight: 700; font-size: 12px; color: var(--sub); background: var(--mantle);
+    border: 1px solid var(--s1); border-radius: 7px; padding: 5px 12px; cursor: pointer; white-space: nowrap; }
+  .segbtn[aria-pressed="true"] { background: var(--mauve); border-color: var(--mauve); color: var(--crust); }
+  .segbtn:not([aria-pressed="true"]):hover { color: var(--text); }
+  .swbar { display: none; }
+  .dispatch[data-view="swipe"] .swbar { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .swbar .swcount { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--sub); }
+  .swbar .swhint { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-left: auto; }
+  .dispatch[data-view="swipe"] .tray { display: block; position: relative; }
+  .dispatch[data-view="swipe"] .tray .ticket { display: none; touch-action: pan-y; }
+  .dispatch[data-view="swipe"] .tray .ticket.top { display: flex; }
+  .dispatch[data-view="swipe"] .tray.multi .ticket.top {
+    box-shadow: 7px 7px 0 -2px var(--base), 8px 8px 0 -2px var(--s0), 14px 14px 0 -4px var(--base), 15px 15px 0 -4px var(--s0); }
+  .dispatch[data-view="swipe"] .tray .ticket.drag { transition: none; cursor: grabbing; }
+  .dispatch[data-view="swipe"] .tray .ticket.top:not(.drag) { transition: transform .28s cubic-bezier(.2,.8,.3,1), opacity .28s; }
+
+  /* ticket */
+  .ticket { display: flex; background: var(--d-paper); border: 1px solid var(--s0); border-radius: 10px; overflow: hidden; }
+  .ticket .stub { flex: none; width: 30px; display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--s0); }
+  .ticket .stub .v { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+    writing-mode: vertical-rl; transform: rotate(180deg); color: var(--dim); }
+  .ticket.sig-green { border-left: 3px solid var(--green); } .ticket.sig-amber { border-left: 3px solid var(--yellow); }
+  .ticket.sig-red { border-left: 3px solid var(--red); }
+  .ticket.sig-green .stub .v { color: var(--green); } .ticket.sig-amber .stub .v { color: var(--yellow); } .ticket.sig-red .stub .v { color: var(--red); }
+  .tk { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .tkrow { display: flex; gap: 12px; padding: 13px 15px 2px; }
+  .tkmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; }
+  .printhead { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--dim); flex-wrap: wrap; }
+  .printhead .no { color: var(--text); font-weight: 600; } .printhead .dot { opacity: .5; }
+  .tk .ttl { font-size: 17px; font-weight: 650; line-height: 1.25; margin: 0; }
+  a.ttl:hover { color: var(--text); text-decoration: underline; }
+
+  /* fields + pills */
+  .fields { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; }
+  .field { display: flex; gap: 10px; align-items: baseline; }
+  .fk { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--dim); font-weight: 700; width: 58px; flex: none; text-transform: uppercase; padding-top: 2px; }
+  .fv { min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+  .fv .add { color: var(--green); font-weight: 700; } .fv .del { color: var(--red); font-weight: 700; } .fv .mono { font-family: var(--mono); color: var(--sub); }
+  .chip { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+  .chip.sev-high { background: var(--bad-soft); color: var(--red); } .chip.sev-medium { background: var(--mid-soft); color: var(--yellow); }
+  .chip.sev-low { background: var(--s0); color: var(--sub); } .chip.clean { background: var(--good-soft); color: var(--green); }
+  .chip.lbl { background: var(--s0); color: var(--sub); font-weight: 400; }
+  .scores { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .spill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; font-weight: 700;
+    border: 1px solid currentColor; border-radius: 999px; padding: 2px 9px; }
+  .spill .pl { font-weight: 400; opacity: .7; } .spill.good { color: var(--green); } .spill.mid { color: var(--yellow); } .spill.bad { color: var(--red); }
+
+  /* SCORE stamp */
+  .tkside { flex: none; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 9px; padding: 1px 0 12px; }
+  .insp { font-family: var(--mono); color: var(--sub); border: 2px solid currentColor; border-radius: 6px; padding: 5px 11px 6px;
+    text-align: center; line-height: 1; transform: rotate(-4deg); display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .ticket.sig-green .insp { color: var(--green); } .ticket.sig-amber .insp { color: var(--yellow); } .ticket.sig-red .insp { color: var(--red); }
+  .insp .il { font-weight: 800; font-size: 9px; letter-spacing: .13em; opacity: .8; }
+  .insp b { font-size: 22px; font-weight: 800; letter-spacing: .01em; } .insp b i { font-style: normal; font-size: 11px; font-weight: 700; opacity: .5; }
+  .insp small { font-size: 10px; font-weight: 400; opacity: .72; white-space: nowrap; }
+  .tkgh { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--sub);
+    border: 1px solid var(--s1); border-radius: 7px; padding: 5px 10px; text-decoration: none; }
+  .tkgh:hover { color: var(--text); background: var(--s0); text-decoration: none; } .tkgh svg { width: 13px; height: 13px; }
+
+  /* inline detail */
+  .detail { border-top: 1px dashed var(--s1); padding: 13px 16px 2px; }
+  .cg { background: var(--d-panel); border: 1px solid var(--s1); border-radius: 9px; padding: 11px 13px 10px; margin: 0 0 13px; }
+  .cg-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 9px; }
+  .cg-t { font-family: var(--mono); font-size: 11px; letter-spacing: .13em; color: var(--dim); font-weight: 700; }
+  .cg-verdict { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+  .cg-score { font-size: 26px; font-weight: 800; line-height: 1; margin-left: auto; } .cg-score small { font-size: 12px; font-weight: 700; color: var(--dim); }
+  .cg.green .cg-score, .cg.green .cg-verdict { color: var(--green); } .cg.amber .cg-score, .cg.amber .cg-verdict { color: var(--yellow); }
+  .cg.red .cg-score, .cg.red .cg-verdict { color: var(--red); }
+  .cg-bar { display: flex; gap: 3px; height: 38px; }
+  .cg-slot { position: relative; background: var(--base); border: 1px solid var(--s0); border-radius: 4px; overflow: hidden; display: flex; align-items: flex-end; }
+  .cg-earn { width: 100%; } .cg-earn.good { background: var(--green); } .cg-earn.mid { background: var(--yellow); } .cg-earn.bad { background: var(--red); }
+  .cg-wt { position: absolute; top: 5px; left: 0; right: 0; text-align: center; font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--dim); }
+  .cg-legend { display: flex; flex-wrap: wrap; gap: 4px 15px; margin-top: 10px; }
+  .cg-leg { font-family: var(--mono); font-size: 12px; color: var(--sub); display: inline-flex; align-items: center; gap: 6px; }
+  .cg-leg i { font-style: normal; color: var(--dim); } .cg-leg em { font-style: normal; font-weight: 700; color: var(--text); }
+  .cg-leg .d { width: 8px; height: 8px; border-radius: 2px; } .d.good { background: var(--green); } .d.mid { background: var(--yellow); } .d.bad { background: var(--red); }
+  .cg-note { font-family: var(--mono); font-size: 11px; color: var(--dim); margin: 9px 0 0; line-height: 1.5; }
+  .dfindings { display: flex; flex-direction: column; gap: 9px; margin-bottom: 12px; }
+  .dfinding { border: 1px solid var(--s0); border-radius: 8px; padding: 10px 12px; background: var(--d-panel); }
+  .dfinding .fhd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
+  .dfinding .loc { font-family: var(--mono); font-size: 12px; color: var(--sub); } .dfinding .fnote { margin: 0; font-size: 13px; color: var(--text); line-height: 1.5; }
+  .dclean { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--sub); margin-bottom: 12px; } .dclean .ck { color: var(--green); font-weight: 700; }
+  .dmore { font-family: var(--mono); font-size: 12px; }
+  .detailscore { margin: 16px 0 8px; max-width: 760px; }
+  .detailscore .scores { margin-bottom: 11px; }
+  .scorewhy { font-size: 13px; color: var(--sub); margin: 10px 0 0; line-height: 1.5; max-width: 72ch; }
+
+  /* actions */
+  .tkacts { display: flex; align-items: center; gap: 9px; padding: 11px 15px; border-top: 1px dashed var(--s1); background: color-mix(in srgb, var(--mantle) 55%, var(--d-paper)); }
+  .tkacts .spacer { flex: 1; }
+  .tkacts .btn.sub { background: transparent; color: var(--sub); border: 1px solid transparent; }
+  .tkacts .btn.sub:hover { color: var(--text); background: var(--s0); }
+  .tkacts .caret { font-size: 10px; opacity: .7; transition: transform .2s; display: inline-block; } .ticket.open .caret { transform: rotate(180deg); }
+  .btn.hero { background: var(--mauve); border-color: var(--mauve); color: var(--crust); font-weight: 700; min-width: 150px; justify-content: center; }
+  .btn.hero:hover { filter: brightness(1.06); }
+  .ticket.sig-red .btn.hero { background: transparent; color: var(--sub); border: 1px solid var(--s1); min-width: 0; }
+  .ticket.sig-red .btn.hero:hover { color: var(--text); background: var(--s0); filter: none; }
+
+  /* ON THE LINE (preparing / running) */
+  .line { margin-top: 16px; background: var(--mantle); border: 1px solid var(--s0); border-radius: 10px; padding: 12px 14px 14px; }
+  .line-head { display: flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--sub); margin-bottom: 11px; }
+  .line-head .n { color: var(--text); font-weight: 700; }
+  .feed { display: flex; flex-direction: column; gap: 8px; }
+  .dmini { display: flex; align-items: center; gap: 12px; background: var(--d-paper); border: 1px solid var(--s0); border-left: 3px solid var(--s2); border-radius: 6px; padding: 9px 12px; }
+  .dmini .mid { font-family: var(--mono); font-size: 13px; color: var(--text); font-weight: 700; }
+  .dmini .note { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--sub); }
+  .runsect { margin-top: 24px; }
+  .line-head .rsub { color: var(--dim); font-weight: 400; }
+  .rdot { width: 8px; height: 8px; border-radius: 50%; background: var(--mauve); flex: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mauve) 22%, transparent); animation: rpulse 1.6s ease-in-out infinite; }
+  @keyframes rpulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .rdot { animation: none; } }
+  .rwork { background: var(--d-paper); border: 1px solid var(--s0); border-left: 3px solid var(--mauve); border-radius: 8px; padding: 11px 13px; }
+  .rwork-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 9px; }
+  .rwork-head .mid { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text); }
+  .rwork-head .rtitle { font-weight: 600; color: var(--text); }
+  .rwork-head .rtitle:hover { text-decoration: underline; }
+  .rwork-head .rspace { flex: 1 1 16px; }
+  .rwork-head .rcost { font-family: var(--mono); font-size: 12px; color: var(--sub); }
+  @media (max-width: 640px) { .tkrow { flex-direction: column; } .tkside { flex-direction: row-reverse; align-items: center; justify-content: flex-start; } .insp { transform: none; } }
 </style></head><body>
 {{template "top" .}}{{end}}
 
@@ -542,6 +706,53 @@
   {{if .Confidence}}<span><b class="cert {{certKind .Confidence}}">{{.Confidence}}%</b> {{if eq .Agent "design"}}sure{{else}}certain{{end}}</span>{{end}}
   <span>{{.Agent}}</span>{{if eq .Agent "design"}}<span>goes in the review body</span>{{else if not .Inline}}<span>goes in the review body (line not in diff)</span>{{end}}{{end}}
 
+{{define "d-score"}}<div class="cg {{.Band}}">
+  <div class="cg-head"><span class="cg-t">SCORE</span><span class="cg-verdict">{{if eq .Band "green"}}clears on sight{{else if eq .Band "amber"}}glance first{{else}}needs your eyes{{end}}</span><span class="cg-score">{{.Score}}<small>/100</small></span></div>
+  <div class="cg-bar">{{range .Factors}}<div class="cg-slot" style="flex:{{.WeightPct}}" title="{{.Label}} — weight {{.WeightLabel}}"><span class="cg-wt">{{.WeightPct}}%</span><div class="cg-earn {{.Band}}" style="height:{{.FillPct}}%"></div></div>{{end}}</div>
+  <div class="cg-legend">{{range .Factors}}<span class="cg-leg"><b class="d {{.Band}}"></b>{{.Label}} <i>×{{.WeightLabel}}</i> <em>+{{.Earned}}</em></span>{{end}}</div>
+  {{if .Scored}}<p class="cg-note">slot width = weight, bar fill = points earned, empty = risk deducted. 85+ clears on sight · 60–84 glance · under 60 needs you.</p>{{else}}<p class="cg-note">Risk isn't scored on this one yet — the number is the verifier's confidence alone. The full weighting fills in on the next review.</p>{{end}}
+</div>{{end}}
+
+{{define "d-ticket"}}{{$tok := .Token}}{{with .C}}{{$c := .Clearance}}<article class="ticket sig-{{$c.Band}}" data-id="{{.ID}}">
+  <div class="stub"><span class="v">{{if eq $c.Band "green"}}clear{{else if eq $c.Band "amber"}}glance{{else}}needs you{{end}}</span></div>
+  <div class="tk">
+    <div class="tkrow" aria-expanded="false">
+      <div class="tkmain">
+        <div class="printhead"><a class="no pr" href="{{timeline .Repo .Number}}" title="Every review of this PR">{{repoName .Repo}}#{{.Number}}</a><span class="dot">·</span>@{{.Author}}<span class="dot">·</span>{{ago .FinishedAt}}{{with iteration .Review}}<span class="dot">·</span>{{.}}{{end}}{{template "channel-tag" .Channel}}</div>
+        <a class="ttl" href="/r/{{.ID}}">{{.Title}}</a>
+        <div class="fields">
+          <div class="field"><span class="fk">Findings</span><span class="fv">{{range .Pending}}<span class="chip sev-{{.Severity}}">{{.Agent}} · {{.Severity}}</span>{{else}}<span class="chip clean">✓ none · clear</span>{{end}}</span></div>
+          {{with .Labels}}<div class="field"><span class="fk">Labels</span><span class="fv">{{range .}}<span class="chip lbl">{{.}}</span>{{end}}</span></div>{{end}}
+          <div class="field"><span class="fk">Size</span><span class="fv"><span class="mono">{{with .Tier}}{{.}} · {{end}}<span class="add">+{{.Additions}}</span> <span class="del">−{{.Deletions}}</span> · {{.Files}}f</span></span></div>
+        </div>
+        <div class="scores">
+          <span class="spill {{.ConfBand}}"><span class="pl">confidence</span>{{.Approval}}%</span>
+          {{if ge .PRRisk 0}}<span class="spill {{.PRBand}}"><span class="pl">PR risk</span>{{.PRRisk}}/10</span><span class="spill {{.ProdBand}}"><span class="pl">prod risk</span>{{.ProdRisk}}/10</span>{{end}}
+          <span class="spill {{timeBand .Took}}"><span class="pl">time</span>{{took .Review}}</span>
+          <span class="spill {{costBand .CostUSD}}"><span class="pl">cost</span>{{money .CostUSD}}</span>
+        </div>
+      </div>
+      <div class="tkside">
+        <div class="insp"><span class="il">SCORE</span><b>{{$c.Score}}<i>/100</i></b><small>reviewed</small></div>
+        <a class="tkgh" href="{{.URL}}" target="_blank" rel="noopener" title="Open the PR on GitHub">{{template "i-github"}}<span>GitHub</span></a>
+      </div>
+    </div>
+    <div class="detail" hidden>
+      {{template "d-score" $c}}
+      {{if .Pending}}<div class="dfindings">{{range .Pending}}<div class="dfinding">
+        <div class="fhd"><span class="chip sev-{{.Severity}}">{{.Agent}} · {{.Severity}}</span><span class="loc">{{.Path}}:{{.Line}}</span>{{if .Confidence}}<span class="loc">{{.Confidence}}% sure</span>{{end}}</div>
+        <p class="fnote">{{.Comment}}</p></div>{{end}}</div>
+      <a class="btn out small dmore" href="/r/{{.ID}}">Open full review with diffs →</a>
+      {{else}}<div class="dclean"><span class="ck">✓</span>The reviewers found nothing to post. Safe to approve.</div>{{end}}
+    </div>
+    <div class="tkacts">
+      <button class="btn sub" type="button" data-act="review">Review<span class="caret">▾</span></button>
+      <span class="spacer"></span>
+      {{if eq $c.Band "red"}}<a class="btn hero" href="/r/{{.ID}}">{{if .Pending}}Review {{len .Pending}} →{{else}}Open review →{{end}}</a>{{else if .Pending}}<form method="post" action="/r/{{.ID}}"><input type="hidden" name="csrf" value="{{$tok}}">{{range .Pending}}<input type="hidden" name="f_{{.ID}}" value="on">{{end}}<button class="btn hero" name="action" value="post">Agree &amp; post {{len .Pending}}</button></form>{{else}}<form method="post" action="/r/{{.ID}}"><input type="hidden" name="csrf" value="{{$tok}}"><button class="btn hero" name="action" value="approve">Approve</button></form>{{end}}
+    </div>
+  </div>
+</article>{{end}}{{end}}
+
 {{define "index"}}{{template "head" (page .Title 60 "reviews")}}
 <main class="page">
   {{with .Msg}}<div class="callout">{{.}}</div>{{end}}
@@ -553,36 +764,51 @@
     <a class="spend" href="/stats"><span>Spent today <b>{{money .SpentToday}}</b></span><span>7 days <b>{{money .SpentWeek}}</b></span></a>
   </div>
 
-  <section class="sect" aria-labelledby="needs">
+  <section class="sect dispatch" aria-labelledby="needs">
     <h2 id="needs" class="h2">Needs you{{with .Waiting}} <span class="count need">{{len .}}</span>{{end}}</h2>
-    {{range .Waiting}}<article class="card row">
-      <div class="main">
-        <a class="ttl" href="/r/{{.ID}}">{{.Title}}</a>
-        <div class="meta"><a class="mono pr" href="{{timeline .Repo .Number}}" title="{{.Repo}}: every review of this PR">{{repoName .Repo}}#{{.Number}}</a>
-          <span>by <b>@{{.Author}}</b></span>{{with iteration .Review}}<span>{{.}}</span>{{end}}<span>{{ago .FinishedAt}}</span>{{template "labels" .Labels}}{{template "channel-tag" .Channel}}</div>
-        <div class="badges">{{range .Badges}}<span class="badge {{.Kind}}">{{.Text}}</span>{{end}}<span class="cost">{{money .CostUSD}}</span></div>
+    <div class="inbar"><span class="seglabel">View:</span>
+      <button class="segbtn" id="m-scroll" data-view="scroll" aria-pressed="true" title="Scrolling list">Scroll</button>
+      <button class="segbtn" id="m-swipe" data-view="swipe" aria-pressed="false" title="One card at a time">Swipe</button>
+      <div class="infowrap" id="scoreinfo">
+        <button class="infobtn" id="scoreinfo-btn" aria-label="How the score works" aria-expanded="false">i</button>
+        <div class="infopop" role="tooltip">
+          <h4>Score /100</h4>
+          <p>How safe it is to approve <b>without reading it yourself</b>. Higher = safer. It decides which lane a PR lands in.</p>
+          <div class="wt"><span>confidence <i>×0.30</i></span><span>PR risk <i>×0.25</i></span><span>prod risk <i>×0.45</i></span></div>
+          <p>A weighted blend — <b>production impact counts most</b>. Not the same as the reviewer's <b>confidence&nbsp;%</b>, which is one of the three inputs.</p>
+          <div class="bnd"><span class="sw" style="background:var(--green)"></span><b>85–100</b> clears on sight</div>
+          <div class="bnd"><span class="sw" style="background:var(--yellow)"></span><b>60–84</b> glance first</div>
+          <div class="bnd"><span class="sw" style="background:var(--red)"></span><b>under 60</b> needs you</div>
+        </div>
       </div>
-      <div class="side">{{template "gh-pr" .URL}}<a class="btn primary" href="/r/{{.ID}}">Open review</a></div>
-    </article>{{else}}<div class="empty">Nothing waiting for you.</div>{{end}}
+    </div>
+    {{range .Lanes}}<div class="group">
+      <div class="group-head"><h2><span class="bar"></span>{{.Title}}<span class="gcount {{.Key}}">{{len .Cards}}</span></h2><span class="sub">{{.Sub}}</span></div>
+      <div class="tray">{{range .Cards}}{{template "d-ticket" (dict "C" . "Token" $.Token)}}{{end}}</div>
+      <div class="swbar"><button class="btn sub swlater" type="button">← Later</button><span class="swcount"></span><span class="swhint">drag the card, or use its buttons</span></div>
+    </div>{{else}}<div class="empty">Nothing waiting for you.</div>{{end}}
     {{with .ClosedOut}}<div class="closedout"><p class="sub">No longer waiting for you: merged or closed on GitHub before you decided.</p>
       <ul>{{range .}}<li>{{template "pr-icon" .PR}}<a href="/r/{{.ID}}">{{.Title}}</a>
         <span class="sub"><span class="mono">{{repoName .Repo}}#{{.Number}}</span> · {{prTitle .PR}}</span></li>{{end}}</ul></div>{{end}}
   </section>
 
-  <div data-running-all>{{if .Active}}<section class="sect" id="running" aria-labelledby="running-h">
-    <h2 id="running-h" class="h2">Running</h2>
-    {{range .Active}}<article class="card stack">
-      <div class="headrow">
-        <div class="main">
-          <a class="ttl" href="/r/{{.ID}}">{{.Title}}</a>
-          <div class="meta"><a class="mono pr" href="{{timeline .Repo .Number}}" title="{{.Repo}}: every review of this PR">{{repoName .Repo}}#{{.Number}}</a>
-            <span>by <b>@{{.Author}}</b></span>{{if .Deep}}<span class="tag deep">deep review</span>{{end}}{{with iteration .}}<span>{{.}}</span>{{end}}{{template "labels" .Labels}}{{template "channel-tag" .Channel}}{{if .CostUSD}}<span>{{money .CostUSD}} so far</span>{{end}}</div>
-        </div>
-        {{template "gh-pr-small" .URL}}
+  <div data-running-all>{{if .Active}}<section class="dispatch runsect" id="running" aria-labelledby="running-h">
+    <h2 id="running-h" class="vh">Running</h2>
+    <div class="line">
+      <div class="line-head"><span class="rdot"></span>On the line<span class="n">{{len .Active}}</span><span class="rsub">· Agent-K is reviewing</span></div>
+      <div class="feed">
+        {{range .Active}}<article class="rwork">
+          <div class="rwork-head">
+            <a class="mid" href="{{timeline .Repo .Number}}" title="{{.Repo}}: every review of this PR">{{repoName .Repo}}#{{.Number}}</a>
+            <a class="rtitle" href="/r/{{.ID}}">{{.Title}}</a>
+            {{if .Deep}}<span class="tag deep">deep</span>{{end}}{{template "labels" .Labels}}{{template "channel-tag" .Channel}}
+            <span class="rspace"></span>{{if .CostUSD}}<span class="rcost">{{money .CostUSD}} so far</span>{{end}}{{template "gh-pr-small" .URL}}
+          </div>
+          {{template "running-line" .}}
+          {{template "steps" .}}
+        </article>{{end}}
       </div>
-      {{template "running-line" .}}
-      {{template "steps" .}}
-    </article>{{end}}
+    </div>
   </section>{{end}}</div>
 
   {{if .Failed}}<section class="sect" aria-labelledby="failed">
@@ -605,6 +831,7 @@
     {{if .Recent}}{{template "review-table" .Recent}}{{else}}<div class="empty">No reviews yet.</div>{{end}}
   </section>
 </main>
+<script src="/dispatch.js" defer></script>
 {{template "foot"}}{{end}}
 
 {{define "crumb-root"}}{{if eq . "history"}}<a href="/history">History</a>{{else}}<a href="/">Reviews</a>{{end}} <span aria-hidden="true">/</span>{{end}}
@@ -623,6 +850,17 @@
       {{if and .R.Deep (not .R.Tier)}}<span class="tag deep">deep review</span>{{end}}
       {{if .R.DryRun}}<span class="tag">dry run: nothing goes to GitHub</span>{{end}}</div>
   </div>
+
+  {{if .R.Approval}}<div class="dispatch detailscore">
+    <div class="scores">
+      <span class="spill {{.R.ConfBand}}"><span class="pl">confidence</span>{{.R.Approval}}%</span>
+      {{if ge .R.PRRisk 0}}<span class="spill {{.R.PRBand}}"><span class="pl">PR risk</span>{{.R.PRRisk}}/10</span><span class="spill {{.R.ProdBand}}"><span class="pl">prod risk</span>{{.R.ProdRisk}}/10</span>{{end}}
+      <span class="spill {{timeBand .R.Took}}"><span class="pl">time</span>{{took .R}}</span>
+      <span class="spill {{costBand .R.CostUSD}}"><span class="pl">cost</span>{{money .R.CostUSD}}</span>
+    </div>
+    {{template "d-score" .R.Clearance}}
+    {{with .R.ApprovalReason}}<p class="scorewhy">{{.}}</p>{{end}}
+  </div>{{end}}
 
   {{with .Msg}}<div class="callout">{{.}}</div>{{end}}
   {{if .Stale}}<div class="callout warn">New commits since this review: it covered <code>{{short .R.HeadSHA}}</code>, the PR is now at

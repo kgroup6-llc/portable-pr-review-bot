@@ -30,7 +30,7 @@ import (
 	"github.com/badam1/personal-review-bot/internal/version"
 )
 
-//go:embed templates.html select-all.js filter.js running.js update.js bar.js settings.js icon.svg favicon.png
+//go:embed templates.html select-all.js filter.js running.js update.js bar.js settings.js dispatch.js icon.svg favicon.png
 var files embed.FS
 
 var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
@@ -65,6 +65,35 @@ var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 	"followupKind": followupKind,
 	"reviewSteps":  reviewSteps,
 	"took":         took,
+	"timeBand": func(d time.Duration) string {
+		switch s := d.Seconds(); {
+		case s < 180:
+			return "good"
+		case s < 480:
+			return "mid"
+		default:
+			return "bad"
+		}
+	},
+	"costBand": func(v float64) string {
+		switch {
+		case v < 0.25:
+			return "good"
+		case v < 0.75:
+			return "mid"
+		default:
+			return "bad"
+		}
+	},
+	"dict": func(kv ...any) map[string]any {
+		m := make(map[string]any, len(kv)/2)
+		for i := 0; i+1 < len(kv); i += 2 {
+			if k, ok := kv[i].(string); ok {
+				m[k] = kv[i+1]
+			}
+		}
+		return m
+	},
 	"day":          day,
 	"ticks":        ticks,
 	"labelKind":    labelKind,
@@ -218,7 +247,7 @@ func (s *server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /r/{id}", s.act)
 	mux.HandleFunc("GET /active.json", s.active)
 	mux.HandleFunc("GET /update.json", s.updateStatus)
-	for _, name := range []string{"select-all.js", "filter.js", "running.js", "update.js", "bar.js", "settings.js", "icon.svg", "favicon.png"} {
+	for _, name := range []string{"select-all.js", "filter.js", "running.js", "update.js", "bar.js", "settings.js", "dispatch.js", "icon.svg", "favicon.png"} {
 		mux.HandleFunc("GET /"+name, func(w http.ResponseWriter, r *http.Request) { http.ServeFileFS(w, r, files, name) })
 	}
 	return mux
@@ -317,10 +346,10 @@ func (s *server) index(w http.ResponseWriter, r *http.Request) {
 	for i, rev := range waiting {
 		fs, _ := s.d.Store.Findings(rev.ID)
 		earlier, _ := s.d.Store.EarlierPosted(rev.Repo, rev.Number, rev.ID)
-		cards[i] = waitingCard{rev, waitingBadges(rev, fs, earlier)}
+		cards[i] = waitingCard{rev, fs, waitingBadges(rev, fs, earlier)}
 	}
 	closedOut, _ := s.d.Store.ClosedOut(now.Add(-24 * time.Hour))
-	s.render(w, "index", map[string]any{"Title": title, "Waiting": cards, "Active": active, "Recent": recent, "ClosedOut": closedOut,
+	s.render(w, "index", map[string]any{"Title": title, "Waiting": cards, "Lanes": laneGroups(cards), "Active": active, "Recent": recent, "ClosedOut": closedOut,
 		"Failed": failed, "Token": s.token, "Threshold": s.cfg().Threshold, "AutoPost": s.cfg().AutoPostSeverities(),
 		"Held": s.cfg().HeldSeverities(), "Msg": r.URL.Query().Get("msg"), "SpentToday": today.CostUSD,
 		"SpentWeek": week.CostUSD})
@@ -329,7 +358,52 @@ func (s *server) index(w http.ResponseWriter, r *http.Request) {
 // waitingCard is a review waiting for you on the main page, with what it holds.
 type waitingCard struct {
 	store.Review
-	Badges []badge
+	Findings []store.Finding
+	Badges   []badge
+}
+
+// Pending are the findings on this card still waiting for your decision — the ones an "Agree & post" would send.
+func (c waitingCard) Pending() []store.Finding {
+	var out []store.Finding
+	for _, f := range c.Findings {
+		if f.Status == store.Pending {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// lane is one band of the dispatch inbox: the cards that scored into it, easiest band first.
+type lane struct {
+	Key   string // green | amber | red
+	Title string // Clear | Glance | Needs you
+	Sub   string
+	Cards []waitingCard
+}
+
+// laneGroups splits the waiting cards into the three dispatch lanes by clearance band, easiest first (clear → glance
+// → needs you). Empty lanes are dropped so the page shows only what's there.
+func laneGroups(cards []waitingCard) []lane {
+	defs := []lane{
+		{Key: "green", Title: "Clear", Sub: "nothing to post — safe to approve"},
+		{Key: "amber", Title: "Glance", Sub: "a minor nit or two"},
+		{Key: "red", Title: "Needs you", Sub: "look before approving"},
+	}
+	for _, c := range cards {
+		band := c.Clearance().Band
+		for i := range defs {
+			if defs[i].Key == band {
+				defs[i].Cards = append(defs[i].Cards, c)
+			}
+		}
+	}
+	out := make([]lane, 0, len(defs))
+	for _, d := range defs {
+		if len(d.Cards) > 0 {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // updateView is what the main page says about updates: a newer release to install, or an update under way.
