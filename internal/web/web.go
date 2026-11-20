@@ -30,7 +30,7 @@ import (
 	"github.com/badam1/personal-review-bot/internal/version"
 )
 
-//go:embed templates.html select-all.js filter.js running.js update.js bar.js settings.js dispatch.js icon.svg favicon.png
+//go:embed templates.html select-all.js filter.js running.js update.js bar.js settings.js dispatch.js icon.svg favicon.png fonts/Inter.woff2 fonts/Archivo.woff2 fonts/SpaceMono-400.woff2 fonts/SpaceMono-700.woff2
 var files embed.FS
 
 var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
@@ -250,6 +250,17 @@ func (s *server) routes() *http.ServeMux {
 	for _, name := range []string{"select-all.js", "filter.js", "running.js", "update.js", "bar.js", "settings.js", "dispatch.js", "icon.svg", "favicon.png"} {
 		mux.HandleFunc("GET /"+name, func(w http.ResponseWriter, r *http.Request) { http.ServeFileFS(w, r, files, name) })
 	}
+	// Self-hosted woff2 fonts (font-src 'self'); served with the right type since nosniff is on, and cached hard.
+	mux.HandleFunc("GET /fonts/{name}", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		if !strings.HasSuffix(name, ".woff2") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "font/woff2")
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		http.ServeFileFS(w, r, files, "fonts/"+name)
+	})
 	return mux
 }
 
@@ -272,7 +283,7 @@ func (s *server) guard(next http.Handler) http.Handler {
 		h := w.Header()
 		// script-src 'self' allows only the embedded scripts; inline scripts stay blocked. connect-src 'self' lets
 		// running.js read /active.json; img-src 'self' the favicon.
-		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
+		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; font-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("X-Content-Type-Options", "nosniff")
 		// same-origin, not no-referrer: with no-referrer browsers send "Origin: null" on the page's own form posts,

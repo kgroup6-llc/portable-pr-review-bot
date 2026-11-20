@@ -3,6 +3,11 @@
 <title>{{.Title}}</title>
 <link rel="icon" href="/favicon.png" sizes="32x32" type="image/png"><link rel="icon" href="/icon.svg" type="image/svg+xml">{{if .Refresh}}<meta http-equiv="refresh" content="{{.Refresh}}; url=?">{{end}}
 <style>
+  /* self-hosted fonts (served from this origin; CSP font-src 'self') */
+  @font-face { font-family:"Inter"; src:url(/fonts/Inter.woff2) format("woff2"); font-weight:100 900; font-style:normal; font-display:swap; }
+  @font-face { font-family:"Archivo"; src:url(/fonts/Archivo.woff2) format("woff2"); font-weight:100 900; font-style:normal; font-display:swap; }
+  @font-face { font-family:"Space Mono"; src:url(/fonts/SpaceMono-400.woff2) format("woff2"); font-weight:400; font-style:normal; font-display:swap; }
+  @font-face { font-family:"Space Mono"; src:url(/fonts/SpaceMono-700.woff2) format("woff2"); font-weight:700; font-style:normal; font-display:swap; }
   /* Agent-K dispatch chassis */
   :root { --base:#0d0f14; --mantle:#13161d; --crust:#0a0c11; --s0:#20242e; --s1:#2a2e38; --s2:#393f4d; --text:#e9e5d8;
           --sub:#9aa0ac; --dim:#6a7280; --blue:#8da2ff; --lav:#aab6ff; --green:#58bd81; --red:#ee8375; --peach:#d6a84e;
