@@ -131,25 +131,26 @@ type demoFinding struct {
 }
 
 type demoReview struct {
-	repo           string
-	number         int
-	title, author  string
-	tier, models   string
-	reasons        string
-	add, del, n    int
-	cost           float64
-	status         string
-	decision       string
-	labels         []string
-	about          string
-	approval       int
-	approvalReason string
-	findings       []demoFinding
-	runs           []store.Run
-	ago, took      time.Duration // when it started, and how long it ran (0: still running)
-	pr             string        // its state on GitHub: open, draft, merged or closed
-	prBy           string        // who merged it
-	prAgo          time.Duration // how long ago it was merged or closed
+	repo             string
+	number           int
+	title, author    string
+	tier, models     string
+	reasons          string
+	add, del, n      int
+	cost             float64
+	status           string
+	decision         string
+	labels           []string
+	about            string
+	approval         int
+	approvalReason   string
+	prRisk, prodRisk int
+	findings         []demoFinding
+	runs             []store.Run
+	ago, took        time.Duration // when it started, and how long it ran (0: still running)
+	pr               string        // its state on GitHub: open, draft, merged or closed
+	prBy             string        // who merged it
+	prAgo            time.Duration // how long ago it was merged or closed
 }
 
 // seedDemo fills the store with the demo's reviews. The store stamps a review with the time it is written, so the
@@ -190,8 +191,10 @@ func seedDemo(st *store.Store, dbPath string, now time.Time) error {
 			pr: store.PRMerged, prBy: "marco", prAgo: 6 * time.Hour},
 		{repo: "acme/web", number: 975, title: "Move the date picker to the shared library", author: "sam", tier: "small",
 			models: "haiku → sonnet", reasons: "88 lines in 4 files", add: 61, del: 27, n: 4, cost: 0.12,
-			status: store.AwaitingYou, decision: "1 need you", labels: []string{"risk/low"}, ago: 6 * time.Hour, took: 2 * time.Minute,
-			pr: store.PRMerged, prBy: "marco", prAgo: 2 * time.Hour},
+			status: store.AwaitingYou, decision: "approve?", labels: []string{"risk/low"}, ago: 6 * time.Hour, took: 2 * time.Minute,
+			about:    "Moves the date picker into the shared component library so the web and admin apps use one implementation.",
+			approval: 86, approvalReason: "The move is mechanical, but two callers pass a custom format that the shared one renders slightly differently.",
+			prRisk: 4, prodRisk: 3, pr: store.PROpen},
 		{repo: "acme/payments", number: 409, title: "Rename the refund status enum", author: "priya", tier: "medium",
 			models: "sonnet → opus", reasons: "212 lines in 9 files", add: 140, del: 72, n: 9, cost: 0.77, status: store.Done,
 			decision: "bot posted 1, you posted 1", labels: []string{"risk/medium"}, ago: 5 * time.Hour, took: 4 * time.Minute,
@@ -206,6 +209,7 @@ func seedDemo(st *store.Store, dbPath string, now time.Time) error {
 			about:          "Adds a dark theme to the account settings and remembers the choice per user. The colours come from the design tokens, so the other pages can follow.",
 			approval:       93,
 			approvalReason: "Every changed component was rendered in both themes, and the stored preference is read once on load.",
+			prRisk:         1, prodRisk: 1,
 			runs: []store.Run{run("logic", "haiku", 0, 48, 0.03, "Read `ThemeToggle.tsx` and how the preference is stored."),
 				run("verifier", "sonnet", 0, 61, 0.09, ""), run("summary", "haiku", 0, 9, 0.01, "")},
 			ago: 70 * time.Minute, took: 3 * time.Minute, pr: store.PROpen},
@@ -215,6 +219,7 @@ func seedDemo(st *store.Store, dbPath string, now time.Time) error {
 			about:          "Retries a card capture up to three times when the payment gateway times out, instead of failing the order. Timeouts have been failing about one order in 400 since the gateway moved regions.",
 			approval:       58,
 			approvalReason: "The retry was traced end to end, but whether the gateway deduplicates a repeated capture isn't settled by the code.",
+			prRisk:         7, prodRisk: 9,
 			findings: []demoFinding{
 				{"logic", "high", "internal/gateway/capture.go", 44, "A retried capture can charge the card twice",
 					"When the gateway times out after it has captured, the retry captures again: nothing makes the second call idempotent. Send the same `Idempotency-Key` on every attempt, as `Refund` already does (`refund.go:58`).",
@@ -246,7 +251,10 @@ func seedDemo(st *store.Store, dbPath string, now time.Time) error {
 		err = errors.Join(st.SetPlan(id, r.title, r.author, sha, r.tier, r.models, r.reasons, r.add, r.del, r.n),
 			st.AddCost(id, r.cost), st.SetLabels(id, r.labels))
 		if r.about != "" {
-			err = errors.Join(err, st.SetAbout(id, r.about), st.SetApproval(id, r.approval, r.approvalReason))
+			err = errors.Join(err, st.SetAbout(id, r.about))
+		}
+		if r.approval > 0 {
+			err = errors.Join(err, st.SetApproval(id, r.approval, r.approvalReason), st.SetRisk(id, r.prRisk, r.prodRisk))
 		}
 		for _, f := range r.findings {
 			inline := f.path != ""

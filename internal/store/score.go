@@ -1,6 +1,10 @@
 package store
 
-import "math"
+import (
+	"fmt"
+	"math"
+	"time"
+)
 
 // Clearance weights the verifier's signals into one 0-100 "safe to approve on sight" score, so the inbox can lead
 // with a single number instead of a wall of text. Production impact counts most; low confidence and PR risk pull it
@@ -64,6 +68,28 @@ func factorBand(n float64, higher bool) string {
 }
 
 func factorPoints(weight, scale float64) int { return int(math.Round(weight * scale)) }
+
+// WeightPct is the factor's slot width in the breakdown bar: its share of the 100-point score.
+func (f Factor) WeightPct() int { return int(math.Round(f.Weight * 100)) }
+
+// FillPct is how full the factor's slot is — the points earned out of the most it could contribute.
+func (f Factor) FillPct() int {
+	if f.Max == 0 {
+		return 0
+	}
+	return int(math.Round(float64(f.Earned) / float64(f.Max) * 100))
+}
+
+// WeightLabel formats the factor's weight like the dispatch legend (×0.30).
+func (f Factor) WeightLabel() string { return fmt.Sprintf("%.2f", f.Weight) }
+
+// ConfBand, PRBand and ProdBand rate the component pills on the card as good / mid / bad.
+func (r Review) ConfBand() string { return factorBand(float64(r.Approval)/10, true) }
+func (r Review) PRBand() string   { return factorBand(float64(r.PRRisk), false) }
+func (r Review) ProdBand() string { return factorBand(float64(r.ProdRisk), false) }
+
+// Took is the review's wall-clock duration, for the "time" pill and its band.
+func (r Review) Took() time.Duration { return r.FinishedAt.Sub(r.StartedAt) }
 
 // Clearance computes the review's weighted score. When the verifier hasn't scored risk yet (PRRisk or ProdRisk < 0),
 // the score is the verifier's confidence alone and the breakdown shows only that factor.

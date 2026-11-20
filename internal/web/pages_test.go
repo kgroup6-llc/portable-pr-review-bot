@@ -306,7 +306,7 @@ func TestIterationLabel(t *testing.T) {
 		t.Error("a first review carries no iteration label")
 	}
 	_, page = s.get("/")
-	want(t, page, "· @dev · 2nd iteration · new commits ·", `<span>2nd iteration · new commits</span>`)
+	want(t, page, "@dev", "2nd iteration · new commits")
 	_, page = s.get("/pr/acme/infra/12")
 	want(t, page, "<span>1st iteration</span>", "<span>2nd iteration</span>")
 }
@@ -814,7 +814,9 @@ func TestLabelledButtons(t *testing.T) {
 		}
 	}
 	_, page = s.get("/")
-	want(t, page, button, `>Open review</a>`, fmt.Sprintf(`<a class="glink" href="%s" target="_blank" rel="noopener">`, url), `</svg>GitHub<svg class="ext"`)
+	want(t, page, fmt.Sprintf(`<a class="tkgh" href="%s" target="_blank" rel="noopener"`, url),
+		`name="action" value="approve">Approve</button>`,
+		fmt.Sprintf(`<a class="glink" href="%s" target="_blank" rel="noopener">`, url), `</svg>GitHub<svg class="ext"`)
 	_, page = s.get("/pr/acme/infra/70")
 	want(t, page, button)
 }
