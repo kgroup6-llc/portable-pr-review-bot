@@ -67,18 +67,18 @@ type Review struct {
 	ApprovalReason string
 	// PRRisk and ProdRisk are the verifier's 0-10 ratings of how risky the change is to land (review risk) and to
 	// production (blast radius if it's wrong), higher = riskier. -1 means not scored: an old review, or one still running.
-	PRRisk   int
-	ProdRisk int
-	Labels   []string // the PR's labels the page shows beside its size (SHOW_LABELS), e.g. risk/high
-	Decision       string
-	Error          string
-	Reasons        string // why triage picked the tier and models
-	Iteration      int    // which review of the PR this is: earlier ones that ran (dry runs and idle skips left out), plus one
-	CostUSD        float64
-	CreatedAt      time.Time
-	StartedAt      time.Time
-	FinishedAt     time.Time
-	PR             PRStatus // the PR on GitHub as last checked; one row per PR, shared by its reviews
+	PRRisk     int
+	ProdRisk   int
+	Labels     []string // the PR's labels the page shows beside its size (SHOW_LABELS), e.g. risk/high
+	Decision   string
+	Error      string
+	Reasons    string // why triage picked the tier and models
+	Iteration  int    // which review of the PR this is: earlier ones that ran (dry runs and idle skips left out), plus one
+	CostUSD    float64
+	CreatedAt  time.Time
+	StartedAt  time.Time
+	FinishedAt time.Time
+	PR         PRStatus // the PR on GitHub as last checked; one row per PR, shared by its reviews
 }
 
 // Reran says whether the review is a re-review worth numbering: it ran (or will), it isn't a dry run, and it isn't
