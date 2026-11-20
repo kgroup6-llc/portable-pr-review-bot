@@ -815,7 +815,7 @@ func TestLabelledButtons(t *testing.T) {
 	}
 	_, page = s.get("/")
 	want(t, page, fmt.Sprintf(`<a class="tkgh" href="%s" target="_blank" rel="noopener"`, url),
-		`name="action" value="approve">Approve</button>`,
+		fmt.Sprintf(`<a class="btn hero" href="/r/%d">Open review →</a>`, id), // unscored (approval 0) → needs-you lane
 		fmt.Sprintf(`<a class="glink" href="%s" target="_blank" rel="noopener">`, url), `</svg>GitHub<svg class="ext"`)
 	_, page = s.get("/pr/acme/infra/70")
 	want(t, page, button)

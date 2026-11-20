@@ -748,7 +748,7 @@
     <div class="tkacts">
       <button class="btn sub" type="button" data-act="review">Review<span class="caret">▾</span></button>
       <span class="spacer"></span>
-      {{if .Pending}}<a class="btn hero" href="/r/{{.ID}}">Review &amp; post {{len .Pending}} →</a>{{else}}<form method="post" action="/r/{{.ID}}"><input type="hidden" name="csrf" value="{{$tok}}"><button class="btn hero" name="action" value="approve">Approve</button></form>{{end}}
+      {{if eq $c.Band "red"}}<a class="btn hero" href="/r/{{.ID}}">{{if .Pending}}Review {{len .Pending}} →{{else}}Open review →{{end}}</a>{{else if .Pending}}<form method="post" action="/r/{{.ID}}"><input type="hidden" name="csrf" value="{{$tok}}">{{range .Pending}}<input type="hidden" name="f_{{.ID}}" value="on">{{end}}<button class="btn hero" name="action" value="post">Agree &amp; post {{len .Pending}}</button></form>{{else}}<form method="post" action="/r/{{.ID}}"><input type="hidden" name="csrf" value="{{$tok}}"><button class="btn hero" name="action" value="approve">Approve</button></form>{{end}}
     </div>
   </div>
 </article>{{end}}{{end}}
