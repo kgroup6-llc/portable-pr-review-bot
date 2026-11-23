@@ -720,7 +720,7 @@
   <div class="cg-head"><span class="cg-t">SCORE</span><span class="cg-verdict">{{if eq .Band "green"}}clears on sight{{else if eq .Band "amber"}}glance first{{else}}needs your eyes{{end}}</span><span class="cg-score">{{.Score}}<small>/100</small></span></div>
   <div class="cg-bar">{{range .Factors}}<div class="cg-slot" style="flex:{{.WeightPct}}" title="{{.Label}} — weight {{.WeightLabel}}"><span class="cg-wt">{{.WeightPct}}%</span><div class="cg-earn {{.Band}}" style="height:{{.FillPct}}%"></div></div>{{end}}</div>
   <div class="cg-legend">{{range .Factors}}<span class="cg-leg"><b class="d {{.Band}}"></b>{{.Label}} <i>×{{.WeightLabel}}</i> <em>+{{.Earned}}</em></span>{{end}}</div>
-  {{if .Scored}}<p class="cg-note">slot width = weight, bar fill = points earned, empty = risk deducted. 85+ clears on sight · 60–84 glance · under 60 needs you.</p>{{else}}<p class="cg-note">Risk isn't scored on this one yet — the number is the verifier's confidence alone. The full weighting fills in on the next review.</p>{{end}}
+  {{if .Scored}}<p class="cg-note">slot width = weight, bar fill = points earned, empty = risk deducted. 85+ clears on sight · 45–84 glance · under 45 needs you.</p>{{else}}<p class="cg-note">Risk isn't scored on this one yet — the number is the verifier's confidence alone. The full weighting fills in on the next review.</p>{{end}}
 </div>{{end}}
 
 {{define "d-ticket"}}{{$tok := .Token}}{{with .C}}{{$c := .Clearance}}<article class="ticket sig-{{$c.Band}}" data-id="{{.ID}}">
@@ -784,11 +784,11 @@
         <div class="infopop" role="tooltip">
           <h4>Score /100</h4>
           <p>How safe it is to approve <b>without reading it yourself</b>. Higher = safer. It decides which lane a PR lands in.</p>
-          <div class="wt"><span>confidence <i>×0.30</i></span><span>PR risk <i>×0.25</i></span><span>prod risk <i>×0.45</i></span></div>
-          <p>A weighted blend — <b>production impact counts most</b>. Not the same as the reviewer's <b>confidence&nbsp;%</b>, which is one of the three inputs.</p>
+          <div class="wt"><span>confidence <i>×0.55</i></span><span>PR risk <i>×0.15</i></span><span>prod risk <i>×0.30</i></span></div>
+          <p>Led by the verifier's <b>confidence</b>, with production risk the heaviest modulator. A high-confidence review stays high unless risk is real. The <b>confidence&nbsp;%</b> pill is just that one input.</p>
           <div class="bnd"><span class="sw" style="background:var(--green)"></span><b>85–100</b> clears on sight</div>
-          <div class="bnd"><span class="sw" style="background:var(--yellow)"></span><b>60–84</b> glance first</div>
-          <div class="bnd"><span class="sw" style="background:var(--red)"></span><b>under 60</b> needs you</div>
+          <div class="bnd"><span class="sw" style="background:var(--yellow)"></span><b>45–84</b> glance first</div>
+          <div class="bnd"><span class="sw" style="background:var(--red)"></span><b>under 45</b> needs you</div>
         </div>
       </div>
     </div>

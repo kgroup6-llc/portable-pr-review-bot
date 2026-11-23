@@ -7,12 +7,13 @@ import (
 )
 
 // Clearance weights the verifier's signals into one 0-100 "safe to approve on sight" score, so the inbox can lead
-// with a single number instead of a wall of text. Production impact counts most; low confidence and PR risk pull it
-// down. It mirrors the dispatch UI one-for-one: each factor fills a slot sized by its weight, and the score is the
-// points earned across every slot (so the per-factor breakdown always sums to the headline).
+// with a single number instead of a wall of text. Confidence leads — a high-confidence review reads as nearly
+// auto-approvable — while PR and production risk modulate it downward. It mirrors the dispatch UI one-for-one: each
+// factor fills a slot sized by its weight, and the score is the points earned across every slot (so the per-factor
+// breakdown always sums to the headline).
 
-// scoreWeights are the factor weights; they sum to 1. Production blast-radius dominates, confidence gates.
-var scoreWeights = struct{ Conf, PR, Prod float64 }{Conf: 0.30, PR: 0.25, Prod: 0.45}
+// scoreWeights are the factor weights; they sum to 1. Confidence leads; production blast-radius is the heaviest risk.
+var scoreWeights = struct{ Conf, PR, Prod float64 }{Conf: 0.55, PR: 0.15, Prod: 0.30}
 
 // Factor is one input to the score: the weight it carries and the points it earned toward the total.
 type Factor struct {
@@ -37,7 +38,7 @@ func scoreBand(s int) string {
 	switch {
 	case s >= 85:
 		return "green"
-	case s >= 60:
+	case s >= 45:
 		return "amber"
 	default:
 		return "red"
