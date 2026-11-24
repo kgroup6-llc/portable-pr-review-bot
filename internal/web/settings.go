@@ -106,7 +106,7 @@ var editable = []struct{ name, label string }{
 
 // shownDefault says each default in words, as the page writes it under the setting.
 var shownDefault = map[string]string{
-	"ORG": "any org", "SKIP_DRAFTS": "on", "MAX_AGE_DAYS": "14 days", "POLL_SECONDS": "2 min", "PARALLEL": "2",
+	"ORG": "any org", "SKIP_DRAFTS": "on", "MAX_AGE_DAYS": "14 days", "POLL_SECONDS": "2 min", "PARALLEL": "4",
 	"AUTO_POST": "low and medium", "THRESHOLD": "80%", "APPROVE_TEXT": "LGTM :+1:", "WATERMARK": "🤖 personal-review-bot",
 	"SAVE_AT": "75%", "MIN_AT": "90%", "AGENT_TIMEOUT_MINUTES": "20 minutes", "SHOW_LABELS": "risk/, auto-risk/",
 	"LABELS_TITLE": "named after the labels", "ADDR": "127.0.0.1:12346", "UPDATE_CHECK": "on", "UPDATE_REPO": "badam1/personal-review-bot",

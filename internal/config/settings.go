@@ -27,7 +27,7 @@ var Defaults = map[string]string{
 	"AUTO_POST":             "low,medium",
 	"APPROVE_TEXT":          "LGTM :+1:",
 	"ADDR":                  "127.0.0.1:12346",
-	"PARALLEL":              "2",
+	"PARALLEL":              "4",
 	"AGENT_TIMEOUT_MINUTES": "20",
 	"SAVE_AT":               "75",
 	"MIN_AT":                "90",
