@@ -111,7 +111,7 @@ func TestProfileMovedToSettings(t *testing.T) {
 func TestSaveSettings(t *testing.T) {
 	s, dir := newSettingsSite(t)
 	form := url.Values{"ORG": {"acme"}, "THRESHOLD": {"85"}, "POLL_SECONDS": {"300"}, "SKIP_DRAFTS": {"0"},
-		"AUTO_POST": {"", "low"}, "WATERMARK": {"🤖 acme bot"}, "APPROVE_TEXT": {"LGTM :+1:"}, "PARALLEL": {"2"},
+		"AUTO_POST": {"", "low"}, "WATERMARK": {"🤖 acme bot"}, "APPROVE_TEXT": {"LGTM :+1:"}, "PARALLEL": {"4"},
 		"SHOW_LABELS": {"risk/, size/"}, "UPDATE_CHECK": {"0", "1"}, "CONTEXT": {"ADRs live in acme/adr.\r\n"},
 		"reviewer": {"logic", "security"}, "on": {"logic"}}
 	rec := s.post("/settings", form)
